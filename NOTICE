@@ -1,0 +1,35 @@
+dsh-acp-pro
+===========
+
+This project incorporates code derived from the deepseek-harness-acp project.
+In accordance with that project's MIT license, the following attribution is
+preserved:
+
+  Upstream repository:  https://github.com/Fleey/deepseek-harness-acp
+  Upstream package:     dsh-tauri-acp
+  Upstream author:      Fleey
+  Copyright:            Copyright (c) 2026 Fleey
+  License:              MIT
+
+The upstream MIT license and copyright notice are retained verbatim in
+[LICENSE](LICENSE). The upstream project is not affiliated with this repository,
+and no endorsement is implied.
+
+This repository's git history was started fresh when the derived source was
+integrated, so it does not carry the upstream commit history.
+
+Third-party components
+----------------------
+
+- Agent Client Protocol SDK (`@agentclientprotocol/sdk`), Apache-2.0, see the
+  package for its license text.
+- The DeepSeek Harness packages (`@deepseek-ai/*`) used at build time and as
+  runtime peers remain under their own licenses and are not vendored here.
+
+Maintenance note
+----------------
+
+This plugin depends on DSH's plugin-record API (`appendPluginRecord`). DSH
+documents that API for packages under `packages/experimental/`; it is not an
+official stability promise for external plugins, so DSH upgrades may require
+follow-up changes in this repository.
