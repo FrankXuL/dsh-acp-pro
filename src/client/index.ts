@@ -2,6 +2,7 @@ import type { AcpClientContext } from './types/runtime.ts'
 import { PLUGIN_ID } from '../shared/constants.ts'
 import { AcpPermissionNode, AcpPlanNode, AcpToolCallNode } from './components/record-nodes.tsx'
 import { acpPermissionDefinition, acpPlanDefinition, acpToolCallDefinition } from './conversation/records.ts'
+import { acpTrajectoryToolCallDefinition } from './conversation/trajectory-records.ts'
 import { en, NS, zh } from './locales/index.ts'
 import { registerAgentsSection } from './register/agents-section.ts'
 import { registerModelSeat } from './register/model-seat.ts'
@@ -22,9 +23,14 @@ export function apply(ctx: AcpClientContext): void {
   ctx.effect(() => mountSessionControlRemote(ctx), `${PLUGIN_ID}: ACP session controls`)
   ctx.effect(() => {
     const undo = [
+      // Chat cards: tool calls, plans, permission requests.
       ctx.uiConversation.events.register(acpToolCallDefinition),
       ctx.uiConversation.events.register(acpPlanDefinition),
       ctx.uiConversation.events.register(acpPermissionDefinition),
+      // Trajectory rows: the same tool-call records, for the native stage view. Plans and
+      // permissions stay in Chat — the Trajectory target has no shape for them, and faking one
+      // would disguise a plan as a tool result.
+      ctx.uiConversation.events.register(acpTrajectoryToolCallDefinition),
     ]
     return () => {
       for (const dispose of undo) dispose()

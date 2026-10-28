@@ -6,6 +6,7 @@
  * a refusal prevents the turn, and that no approval surface means the turn proceeds.
  */
 
+import type { AcpAgentProfile } from '../src/shared/types.ts'
 import type { AdapterHost, ApprovalOutcome } from '../src/host/types/index.ts'
 import type { GenerateOptions } from '@deepseek-ai/dsh-llm'
 import { fileURLToPath } from 'node:url'
@@ -19,17 +20,21 @@ const WORKSPACE = fileURLToPath(new URL('.', import.meta.url))
 
 const silentLogger = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }
 
-function profile(command = MOCK) {
+function profile(command = MOCK): AcpAgentProfile {
   return {
     command,
     args: [MOCK],
     displayName: 'Mock',
-    permission: 'ask' as const,
+    permission: 'ask',
     models: [],
     contextWindow: 200_000,
     discoverModels: false,
     startupTimeoutMs: 10_000,
     idleTimeoutMs: 10_000,
+    env: {},
+    imageInput: 'auto',
+    systemPrompt: 'drop',
+    showToolCalls: false,
   }
 }
 
@@ -38,6 +43,7 @@ function host(approve?: (toolName: string) => ApprovalOutcome): AdapterHost {
     logger: silentLogger,
     agentOf: () => ({ session: { header: { cwd: WORKSPACE } } }) as never,
     approve: approve === undefined ? undefined : async request => approve(request.toolName),
+    readImage: undefined,
   }
 }
 
