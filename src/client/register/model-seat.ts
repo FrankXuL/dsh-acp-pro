@@ -1,14 +1,21 @@
 /**
- * PROTOTYPE (`wayfinder` ticket #04): register a shadow occupant for the composer's
- * `conversation.input.model` seat at `priority: -1` so the icon-rail picker renders instead of
- * the native selector. Throwaway; delete with the component when #04 closes.
+ * Shadow the composer's `conversation.input.model` seat at `priority: -1` so this plugin's
+ * icon-rail picker renders instead of the native selector. Four rules keep it safe:
+ *
+ * 1. `slots.inject` (not `register`): an undeclared seat stays dormant instead of failing load.
+ * 2. Register at `-1` and declare no children: the lowest priority wins, and the native
+ *    `conversation.input.model.label` slot must not be re-declared.
+ * 3. List every service read inside the entry — a missing `remote` / `remote.session` makes the
+ *    entry throw at render time and the engine silently retires it back to the native seat.
+ * 4. try/catch the registration and wrap the component in an error boundary: a failure must
+ *    never take `/model` or the directory service down with it.
  */
 import type { ComponentType, ReactNode } from 'react'
 import type { AcpClientContext, ModelSelection } from '../types/runtime.ts'
 import { Component, createElement } from 'react'
 import { PLUGIN_ID } from '../../shared/constants.ts'
 import { NS } from '../locales/index.ts'
-import { ModelSeatProto, PROTO_CSS } from '../components/model-seat-proto.tsx'
+import { ModelSeat, MODEL_SEAT_CSS } from '../components/model-seat.tsx'
 
 /** A render throw makes the slot engine abdicate the entry permanently; keep it visible. */
 class SeatBoundary extends Component<{ children: ReactNode }, { failed: boolean, message: string }> {
@@ -29,13 +36,13 @@ class SeatBoundary extends Component<{ children: ReactNode }, { failed: boolean,
   }
 }
 
-export function registerModelSeatProto(ctx: AcpClientContext): () => void {
+export function registerModelSeat(ctx: AcpClientContext): () => void {
   let disposeSeat: (() => void) | undefined
   let style: HTMLStyleElement | undefined
   try {
     style = document.createElement('style')
     style.dataset.owner = `${PLUGIN_ID}:model-seat`
-    style.textContent = PROTO_CSS
+    style.textContent = MODEL_SEAT_CSS
     document.head.append(style)
   }
   catch (error) {
@@ -66,7 +73,7 @@ export function registerModelSeatProto(ctx: AcpClientContext): () => void {
               config: owned.configForms.get(PLUGIN_ID),
             }
           },
-        }, ((props: any) => createElement(SeatBoundary, null, createElement(ModelSeatProto as ComponentType<any>, props))) as ComponentType<any>)
+        }, ((props: any) => createElement(SeatBoundary, null, createElement(ModelSeat as ComponentType<any>, props))) as ComponentType<any>)
       }
       catch (error) {
         // Keep the native seat: a registration failure must never take `/model` down with it.

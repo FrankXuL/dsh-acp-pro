@@ -102,7 +102,7 @@ export interface LlmRemote {
   discoverModels: (settingsNs: string, request: { provider?: string }) => Promise<RemoteResult<LlmDiscoveredModel[]>>
 }
 
-/** PROTOTYPE (`#04`): the slice of the internal `modelDirectories` service the shadow picker reads. */
+/** The slice of the internal `modelDirectories` service the shadow picker reads. */
 export interface ModelSelection {
   provider: string
   model: string
@@ -167,7 +167,7 @@ export type AcpClientContext = Context & {
   configForms: ConfigFormsService
   locale: LocaleService
   slots: SlotsService
-  /** PROTOTYPE (`#04`): internal service from `ui-model-selection`; injected lazily. */
+  /** Internal service from `ui-model-selection`; injected lazily, absent on trimmed hosts. */
   modelDirectories: ModelDirectoriesService
   uiConversation: UiConversationService
   remote: {

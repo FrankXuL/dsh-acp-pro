@@ -4,7 +4,7 @@ import { AcpPermissionNode, AcpPlanNode, AcpToolCallNode } from './components/re
 import { acpPermissionDefinition, acpPlanDefinition, acpToolCallDefinition } from './conversation/records.ts'
 import { en, NS, zh } from './locales/index.ts'
 import { registerAgentsSection } from './register/agents-section.ts'
-import { registerModelSeatProto } from './register/model-seat-proto.ts'
+import { registerModelSeat } from './register/model-seat.ts'
 import { mountSessionControlRemote } from './register/session-control-remote.ts'
 import { registerSessionControlStyles } from './register/session-control-styles.ts'
 import { registerStyles } from './register/styles.ts'
@@ -18,8 +18,7 @@ export function apply(ctx: AcpClientContext): void {
   ctx.effect(registerStyles, `${PLUGIN_ID}: page styles`)
   ctx.effect(registerSessionControlStyles, `${PLUGIN_ID}: session control styles`)
   ctx.effect(() => registerAgentsSection(ctx), `${PLUGIN_ID}: agents settings section`)
-  // PROTOTYPE (#04): shadow the composer model seat with a source-tab picker. Remove with #04.
-  ctx.effect(() => registerModelSeatProto(ctx), `${PLUGIN_ID}: prototype model seat`)
+  ctx.effect(() => registerModelSeat(ctx), `${PLUGIN_ID}: model seat`)
   ctx.effect(() => mountSessionControlRemote(ctx), `${PLUGIN_ID}: ACP session controls`)
   ctx.effect(() => {
     const undo = [

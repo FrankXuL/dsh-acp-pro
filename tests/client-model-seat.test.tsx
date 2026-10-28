@@ -3,7 +3,7 @@
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { ModelSeatProto } from '../src/client/components/model-seat-proto.tsx'
+import { ModelSeat } from '../src/client/components/model-seat.tsx'
 
 beforeAll(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
@@ -62,14 +62,14 @@ class FakeStore {
   }
 }
 
-describe('ModelSeatProto prototype', () => {
+describe('model seat', () => {
   it('renders with this-bound form/store without throwing', async () => {
     const store = new FakeStore()
     const container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
     try {
-      await act(async () => root.render(createElement(ModelSeatProto as never, {
+      await act(async () => root.render(createElement(ModelSeat as never, {
         sessionId: 'session-a',
         locked: false,
         available: true,

@@ -1,7 +1,10 @@
 /**
- * PROTOTYPE v6 (`wayfinder` ticket #04): compact icon-rail model picker that mirrors the native
- * two-step root (模型 / 推理), matching native row heights, and shows the ACP name on the trigger.
- * Favorites are localStorage-only for the prototype; persistence is ticket #07.
+ * The composer model picker: an icon rail of sources (favorites, the platform, every configured
+ * ACP) over the shared `ModelDirectory`. The root mirrors the native two-step menu (model /
+ * reasoning) and the trigger shows the owning ACP when the selection belongs to one.
+ *
+ * NOTE: favorites still live in localStorage here; wiring them to the plugin config is spec
+ * ticket #05.
  */
 import type { ReactElement } from 'react'
 import type {
@@ -9,7 +12,7 @@ import type {
 } from '../types/runtime.ts'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 
-interface ProtoSeatProps {
+interface ModelSeatProps {
   sessionId: string
   locked?: boolean
   available?: boolean
@@ -45,47 +48,47 @@ const EMPTY_CONFIG: ConfigFormSnapshot = {
 
 const NOOP_SUBSCRIBE = (): (() => void) => () => {}
 
-export const PROTO_CSS = `
-.dsh-proto-seat{display:inline-flex;position:relative}
-.dsh-proto-trigger{display:inline-flex;align-items:center;gap:4px;height:28px;background:none;border:none;border-radius:var(--dsw-radius-md,12px);color:var(--dsw-alias-label-primary,#eee);cursor:pointer;font:inherit;font-size:13px;padding:0 4px 0 8px;max-width:100%}
-.dsh-proto-trigger:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08))}
-.dsh-proto-trigger:disabled{color:var(--dsw-alias-label-dimmed,#777);cursor:default}
+export const MODEL_SEAT_CSS = `
+.dsh-model-seat{display:inline-flex;position:relative}
+.dsh-model-seat-trigger{display:inline-flex;align-items:center;gap:4px;height:28px;background:none;border:none;border-radius:var(--dsw-radius-md,12px);color:var(--dsw-alias-label-primary,#eee);cursor:pointer;font:inherit;font-size:13px;padding:0 4px 0 8px;max-width:100%}
+.dsh-model-seat-trigger:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08))}
+.dsh-model-seat-trigger:disabled{color:var(--dsw-alias-label-dimmed,#777);cursor:default}
 /* Card geometry mirrors the native model menu (ui-model-selection ModelSelect.module.css .menu). */
-.dsh-proto-panel{box-sizing:border-box;position:fixed;z-index:1100;display:flex;gap:2px;width:340px;height:360px;max-width:calc(100vw - 32px);max-height:min(360px,calc(100vh - 96px));overflow:hidden;padding:4px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-menu-surface-fill,#232323);backdrop-filter:var(--dsw-menu-backdrop-filter,none);--dsw-elevation-stroke-color:var(--dsw-alias-border-l1,#3a3a3a);box-shadow:var(--dsw-elevation-prominent,0 12px 40px rgba(0,0,0,.45));color:var(--dsw-alias-label-primary,#eee);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2,#555);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2,#777)}
-.dsh-proto-panel[data-pane=root]{width:min(240px,calc(100vw - 32px));height:auto}
-.dsh-proto-panel[data-pane=efforts]{width:min(240px,calc(100vw - 32px));height:auto;max-height:min(360px,calc(100vh - 96px))}
-.dsh-proto-root{display:flex;flex-direction:column;gap:0;min-width:min(240px,calc(100vw - 32px));padding:2px 0}
-.dsh-proto-rail{display:flex;flex-direction:column;align-items:center;gap:2px;width:32px;flex:none;padding:2px 0;overflow-y:auto}
-.dsh-proto-rail-btn{width:28px;height:28px;flex:none;display:flex;align-items:center;justify-content:center;background:none;border:none;border-radius:var(--dsw-radius-md,12px);color:var(--dsw-alias-label-tertiary,#999);cursor:pointer;font:inherit}
-.dsh-proto-rail-btn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08));color:var(--dsw-alias-label-primary,#eee)}
-.dsh-proto-rail-btn[data-active=true]{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08));color:var(--dsw-alias-label-primary,#fff)}
-.dsh-proto-rail-btn[data-fav=true][data-active=true]{color:var(--dsw-alias-state-warning-primary,#f5c542)}
-.dsh-proto-rail-glyph{font-size:12px;font-weight:600;line-height:1}
-.dsh-proto-divider{width:16px;height:1px;flex:none;background:var(--dsw-alias-border-l2,#333);margin:2px 0}
-.dsh-proto-body{flex:1;min-width:180px;max-width:340px;min-height:0;display:flex;flex-direction:column}
-.dsh-proto-search{box-sizing:border-box;flex:none;width:100%;height:auto;margin:2px 0 3px;padding:5px 7px;border:0 solid transparent;border-radius:var(--dsw-radius-md,12px);background:transparent;color:inherit;font:inherit;font-size:12px;outline:none}
-.dsh-proto-search::placeholder{color:var(--dsw-alias-label-caption,#8a8a8a)}
-.dsh-proto-list{display:flex;flex-direction:column;min-height:0;flex:1 1 auto;overflow-y:auto}
-.dsh-proto-group{position:sticky;top:0;z-index:1;padding:4px 7px 2px;background:var(--dsw-alias-menu-group-header-fill,rgba(48,49,54,.94));color:var(--dsw-alias-label-tertiary,#8a8a8a);font-size:11px;line-height:16px;font-weight:500}
-.dsh-proto-row{display:flex;align-items:center;gap:2px;min-width:100%}
-.dsh-proto-model{box-sizing:border-box;flex:1;min-width:0;display:flex;align-items:center;gap:6px;min-height:34px;padding:5px 7px;border:none;border-radius:var(--dsw-radius-md,12px);background:transparent;color:inherit;cursor:pointer;font:inherit;text-align:left;outline:none}
-.dsh-proto-model:hover,.dsh-proto-model:focus-visible{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08))}
-.dsh-proto-model:disabled{color:var(--dsw-alias-label-dimmed,#777);cursor:default}
-.dsh-proto-model-name{flex:1;min-width:0;overflow:hidden;color:inherit;font-size:13px;line-height:18px;font-weight:400;text-overflow:ellipsis;white-space:nowrap}
-.dsh-proto-check{flex:0 0 14px;display:grid;place-items:center;color:var(--dsw-alias-label-primary,#eee);font-size:13px}
-.dsh-proto-star{flex:none;width:24px;height:24px;display:grid;place-items:center;padding:0;border:none;border-radius:50%;background:transparent;color:var(--dsw-alias-label-tertiary,#8a8a8a);cursor:pointer;font-size:13px;opacity:0}
-.dsh-proto-row:hover .dsh-proto-star,.dsh-proto-star[data-on=true],.dsh-proto-star:focus-visible{opacity:1}
-.dsh-proto-star:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08));color:var(--dsw-alias-label-primary,#eee)}
-.dsh-proto-star[data-on=true]{color:var(--dsw-alias-state-warning-primary,#f5c542)}
+.dsh-model-seat-panel{box-sizing:border-box;position:fixed;z-index:1100;display:flex;gap:2px;width:340px;height:360px;max-width:calc(100vw - 32px);max-height:min(360px,calc(100vh - 96px));overflow:hidden;padding:4px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-menu-surface-fill,#232323);backdrop-filter:var(--dsw-menu-backdrop-filter,none);--dsw-elevation-stroke-color:var(--dsw-alias-border-l1,#3a3a3a);box-shadow:var(--dsw-elevation-prominent,0 12px 40px rgba(0,0,0,.45));color:var(--dsw-alias-label-primary,#eee);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2,#555);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2,#777)}
+.dsh-model-seat-panel[data-pane=root]{width:min(240px,calc(100vw - 32px));height:auto}
+.dsh-model-seat-panel[data-pane=efforts]{width:min(240px,calc(100vw - 32px));height:auto;max-height:min(360px,calc(100vh - 96px))}
+.dsh-model-seat-root{display:flex;flex-direction:column;gap:0;min-width:min(240px,calc(100vw - 32px));padding:2px 0}
+.dsh-model-seat-rail{display:flex;flex-direction:column;align-items:center;gap:2px;width:32px;flex:none;padding:2px 0;overflow-y:auto}
+.dsh-model-seat-rail-btn{width:28px;height:28px;flex:none;display:flex;align-items:center;justify-content:center;background:none;border:none;border-radius:var(--dsw-radius-md,12px);color:var(--dsw-alias-label-tertiary,#999);cursor:pointer;font:inherit}
+.dsh-model-seat-rail-btn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08));color:var(--dsw-alias-label-primary,#eee)}
+.dsh-model-seat-rail-btn[data-active=true]{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08));color:var(--dsw-alias-label-primary,#fff)}
+.dsh-model-seat-rail-btn[data-fav=true][data-active=true]{color:var(--dsw-alias-state-warning-primary,#f5c542)}
+.dsh-model-seat-rail-glyph{font-size:12px;font-weight:600;line-height:1}
+.dsh-model-seat-divider{width:16px;height:1px;flex:none;background:var(--dsw-alias-border-l2,#333);margin:2px 0}
+.dsh-model-seat-body{flex:1;min-width:180px;max-width:340px;min-height:0;display:flex;flex-direction:column}
+.dsh-model-seat-search{box-sizing:border-box;flex:none;width:100%;height:auto;margin:2px 0 3px;padding:5px 7px;border:0 solid transparent;border-radius:var(--dsw-radius-md,12px);background:transparent;color:inherit;font:inherit;font-size:12px;outline:none}
+.dsh-model-seat-search::placeholder{color:var(--dsw-alias-label-caption,#8a8a8a)}
+.dsh-model-seat-list{display:flex;flex-direction:column;min-height:0;flex:1 1 auto;overflow-y:auto}
+.dsh-model-seat-group{position:sticky;top:0;z-index:1;padding:4px 7px 2px;background:var(--dsw-alias-menu-group-header-fill,rgba(48,49,54,.94));color:var(--dsw-alias-label-tertiary,#8a8a8a);font-size:11px;line-height:16px;font-weight:500}
+.dsh-model-seat-row{display:flex;align-items:center;gap:2px;min-width:100%}
+.dsh-model-seat-model{box-sizing:border-box;flex:1;min-width:0;display:flex;align-items:center;gap:6px;min-height:34px;padding:5px 7px;border:none;border-radius:var(--dsw-radius-md,12px);background:transparent;color:inherit;cursor:pointer;font:inherit;text-align:left;outline:none}
+.dsh-model-seat-model:hover,.dsh-model-seat-model:focus-visible{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08))}
+.dsh-model-seat-model:disabled{color:var(--dsw-alias-label-dimmed,#777);cursor:default}
+.dsh-model-seat-model-name{flex:1;min-width:0;overflow:hidden;color:inherit;font-size:13px;line-height:18px;font-weight:400;text-overflow:ellipsis;white-space:nowrap}
+.dsh-model-seat-check{flex:0 0 14px;display:grid;place-items:center;color:var(--dsw-alias-label-primary,#eee);font-size:13px}
+.dsh-model-seat-star{flex:none;width:24px;height:24px;display:grid;place-items:center;padding:0;border:none;border-radius:50%;background:transparent;color:var(--dsw-alias-label-tertiary,#8a8a8a);cursor:pointer;font-size:13px;opacity:0}
+.dsh-model-seat-row:hover .dsh-model-seat-star,.dsh-model-seat-star[data-on=true],.dsh-model-seat-star:focus-visible{opacity:1}
+.dsh-model-seat-star:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08));color:var(--dsw-alias-label-primary,#eee)}
+.dsh-model-seat-star[data-on=true]{color:var(--dsw-alias-state-warning-primary,#f5c542)}
 /* Root cells mirror .cell: 34px high, 0 8px padding, 13/20 text. */
-.dsh-proto-cell{box-sizing:border-box;display:flex;align-items:center;gap:6px;width:auto;min-width:100%;height:34px;padding:0 8px;border:none;border-radius:var(--dsw-radius-md,12px);background:transparent;color:inherit;font:inherit;font-size:13px;line-height:20px;cursor:pointer;text-align:left;outline:none}
-.dsh-proto-cell:hover,.dsh-proto-cell:focus-visible{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08))}
-.dsh-proto-cell-label{flex:0 0 auto;white-space:nowrap}
-.dsh-proto-cell-value{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:var(--dsw-alias-label-tertiary,#8a8a8a)}
-.dsh-proto-cell-chevron{flex:0 0 auto;width:12px;height:12px;color:var(--dsw-alias-menu-icon,#8a8a8a)}
-.dsh-proto-hint{padding:8px;color:var(--dsw-alias-label-tertiary,#8a8a8a);font-size:12px;line-height:18px}
-.dsh-proto-error{padding:6px 7px;border-radius:var(--dsw-radius-md,12px);background:var(--dsw-alias-interactive-bg-hover-danger,rgba(255,80,80,.14));color:var(--dsw-alias-state-error-primary,#f66);font-size:11px;line-height:16px}
-.dsh-proto-rail-slot{display:contents}
+.dsh-model-seat-cell{box-sizing:border-box;display:flex;align-items:center;gap:6px;width:auto;min-width:100%;height:34px;padding:0 8px;border:none;border-radius:var(--dsw-radius-md,12px);background:transparent;color:inherit;font:inherit;font-size:13px;line-height:20px;cursor:pointer;text-align:left;outline:none}
+.dsh-model-seat-cell:hover,.dsh-model-seat-cell:focus-visible{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08))}
+.dsh-model-seat-cell-label{flex:0 0 auto;white-space:nowrap}
+.dsh-model-seat-cell-value{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:var(--dsw-alias-label-tertiary,#8a8a8a)}
+.dsh-model-seat-cell-chevron{flex:0 0 auto;width:12px;height:12px;color:var(--dsw-alias-menu-icon,#8a8a8a)}
+.dsh-model-seat-hint{padding:8px;color:var(--dsw-alias-label-tertiary,#8a8a8a);font-size:12px;line-height:18px}
+.dsh-model-seat-error{padding:6px 7px;border-radius:var(--dsw-radius-md,12px);background:var(--dsw-alias-interactive-bg-hover-danger,rgba(255,80,80,.14));color:var(--dsw-alias-state-error-primary,#f66);font-size:11px;line-height:16px}
+.dsh-model-seat-rail-slot{display:contents}
 `
 
 interface AgentProfileView { displayName?: string }
@@ -117,7 +120,7 @@ function writeFavorites(keys: readonly string[]): void {
     window.localStorage.setItem(FAVORITES_KEY, JSON.stringify(keys))
   }
   catch {
-    // Prototype only.
+    // Local storage can be unavailable (private mode); favorites are best-effort here.
   }
 }
 
@@ -169,7 +172,7 @@ function SourceIcon({ tab, agents }: { tab: string, agents: Record<string, Agent
   if (name.includes('open') || name.includes('code'))
     return <svg {...common}><path d="M9 5l-5 7 5 7M15 5l5 7-5 7" /></svg>
   const initial = (agents[tab]?.displayName ?? tab).trim()
-  return <span className="dsh-proto-rail-glyph">{initial.length === 0 ? '?' : initial[0]!.toUpperCase()}</span>
+  return <span className="dsh-model-seat-rail-glyph">{initial.length === 0 ? '?' : initial[0]!.toUpperCase()}</span>
 }
 
 function tabName(tab: string, agents: Record<string, AgentProfileView>): string {
@@ -180,7 +183,7 @@ function tabName(tab: string, agents: Record<string, AgentProfileView>): string 
   return agents[tab]?.displayName ?? tab
 }
 
-export function ModelSeatProto(props: ProtoSeatProps): ReactElement | null {
+export function ModelSeat(props: ModelSeatProps): ReactElement | null {
   const directory = props.models
   const form = props.config
   const store = directory?.store
@@ -290,7 +293,7 @@ export function ModelSeatProto(props: ProtoSeatProps): ReactElement | null {
     setError(null)
     setQuery('')
     if (directory === undefined) {
-      setError('prototype: model directory 未注入')
+      setError('模型目录不可用：缺少 modelDirectories 服务')
       return
     }
     void directory.load().catch((cause: unknown) => {
@@ -344,7 +347,7 @@ export function ModelSeatProto(props: ProtoSeatProps): ReactElement | null {
   const choose = useCallback((selection: ModelSelection) => {
     setError(null)
     if (directory === undefined) {
-      setError('prototype: model directory 未注入')
+      setError('模型目录不可用：缺少 modelDirectories 服务')
       return
     }
     void directory.select(selection).then((result) => {
@@ -366,11 +369,11 @@ export function ModelSeatProto(props: ProtoSeatProps): ReactElement | null {
   const triggerText = `${acpName === undefined ? '' : `${acpName} · `}${modelLabel}${effortLabel === undefined ? '' : ` · ${effortLabel}`}`
 
   return (
-    <span className="dsh-proto-seat">
+    <span className="dsh-model-seat">
       <button
         ref={triggerRef}
         type="button"
-        className="dsh-proto-trigger"
+        className="dsh-model-seat-trigger"
         aria-haspopup="menu"
         aria-expanded={open}
         disabled={props.locked === true}
@@ -380,7 +383,7 @@ export function ModelSeatProto(props: ProtoSeatProps): ReactElement | null {
           else
             openMenu()
         }}
-        title="PROTOTYPE v6"
+        title="选择模型与推理等级"
       >
         {triggerText}{busy ? ' …' : ' ▾'}
       </button>
@@ -389,35 +392,35 @@ export function ModelSeatProto(props: ProtoSeatProps): ReactElement | null {
           ref={panelRef}
           role="menu"
           aria-label="模型与推理"
-          className="dsh-proto-panel"
+          className="dsh-model-seat-panel"
           data-pane={pane}
           style={{ left: anchor.left, bottom: anchor.bottom, maxHeight: anchor.maxHeight }}
         >
           {pane === 'root' && (
-            <div className="dsh-proto-root">
-              <button type="button" className="dsh-proto-cell" onClick={() => setPane('models')}>
-                <span className="dsh-proto-cell-label">模型</span>
-                <span className="dsh-proto-cell-value">{modelLabel}</span>
-                <span className="dsh-proto-cell-chevron">›</span>
+            <div className="dsh-model-seat-root">
+              <button type="button" className="dsh-model-seat-cell" onClick={() => setPane('models')}>
+                <span className="dsh-model-seat-cell-label">模型</span>
+                <span className="dsh-model-seat-cell-value">{modelLabel}</span>
+                <span className="dsh-model-seat-cell-chevron">›</span>
               </button>
               {effortChoices.length > 0 && (
-                <button type="button" className="dsh-proto-cell" onClick={() => setPane('efforts')}>
-                  <span className="dsh-proto-cell-label">推理</span>
-                  <span className="dsh-proto-cell-value">{effortLabel ?? '默认'}</span>
-                  <span className="dsh-proto-cell-chevron">›</span>
+                <button type="button" className="dsh-model-seat-cell" onClick={() => setPane('efforts')}>
+                  <span className="dsh-model-seat-cell-label">推理</span>
+                  <span className="dsh-model-seat-cell-value">{effortLabel ?? '默认'}</span>
+                  <span className="dsh-model-seat-cell-chevron">›</span>
                 </button>
               )}
             </div>
           )}
           {pane === 'models' && (
-            <div role="tablist" aria-orientation="vertical" aria-label="来源" className="dsh-proto-rail">
+            <div role="tablist" aria-orientation="vertical" aria-label="来源" className="dsh-model-seat-rail">
               {tabIds.map((id, index) => (
-                <div key={id} className="dsh-proto-rail-slot">
-                  {index === 1 && <div className="dsh-proto-divider" />}
+                <div key={id} className="dsh-model-seat-rail-slot">
+                  {index === 1 && <div className="dsh-model-seat-divider" />}
                   <button
                     type="button"
                     role="tab"
-                    className="dsh-proto-rail-btn"
+                    className="dsh-model-seat-rail-btn"
                     data-active={tab === id}
                     data-fav={id === FAVORITES_TAB}
                     aria-selected={tab === id}
@@ -435,58 +438,58 @@ export function ModelSeatProto(props: ProtoSeatProps): ReactElement | null {
             </div>
           )}
           {pane !== 'root' && (
-            <div className="dsh-proto-body">
+            <div className="dsh-model-seat-body">
               {pane === 'models' && showSearch && (
                 <input
-                  className="dsh-proto-search"
+                  className="dsh-model-seat-search"
                   value={query}
                   placeholder="搜索当前来源"
                   onChange={event => setQuery(event.target.value)}
                 />
               )}
-              <div className="dsh-proto-list">
+              <div className="dsh-model-seat-list">
                 {pane === 'efforts' && effortChoices.map(effortOption => (
-                  <div key={effortOption.id} className="dsh-proto-row">
+                  <div key={effortOption.id} className="dsh-model-seat-row">
                     <button
                       type="button"
-                      className="dsh-proto-model"
+                      className="dsh-model-seat-model"
                       data-selected={currentEffort === effortOption.id}
                       disabled={busy}
                       onClick={() => current === null ? undefined : choose({ ...current, reasoningEffort: effortOption.id })}
                     >
-                      <span className="dsh-proto-model-name">{effortOption.name}</span>
-                      <span className="dsh-proto-check">{currentEffort === effortOption.id ? '✓' : ''}</span>
+                      <span className="dsh-model-seat-model-name">{effortOption.name}</span>
+                      <span className="dsh-model-seat-check">{currentEffort === effortOption.id ? '✓' : ''}</span>
                     </button>
                   </div>
                 ))}
                 {pane === 'models' && (
                   <>
-                    {state.status === 'loading' && <div className="dsh-proto-hint">加载中…</div>}
-                    {tabFailure !== undefined && <div className="dsh-proto-error">{tabFailure.name}：{tabFailure.message}</div>}
+                    {state.status === 'loading' && <div className="dsh-model-seat-hint">加载中…</div>}
+                    {tabFailure !== undefined && <div className="dsh-model-seat-error">{tabFailure.name}：{tabFailure.message}</div>}
                     {visibleGroups.map(entry => (
                       <div key={entry.group.id}>
-                        {visibleGroups.length > 1 && <div className="dsh-proto-group">{entry.group.name}</div>}
+                        {visibleGroups.length > 1 && <div className="dsh-model-seat-group">{entry.group.name}</div>}
                               {entry.models.map(model => {
                           const selected = current !== null && current.provider === entry.group.id && current.model === model.id
                           const pending = state.pending !== null && state.pending.provider === entry.group.id && state.pending.model === model.id
                           const favorite = favoriteSet.has(favoriteKey(entry.group.id, model.id))
                           return (
-                            <div key={model.id} className="dsh-proto-row">
+                            <div key={model.id} className="dsh-model-seat-row">
                               <button
                                 type="button"
                                 role="menuitemradio"
-                                className="dsh-proto-model"
+                                className="dsh-model-seat-model"
                                 data-selected={selected}
                                 aria-checked={selected}
                                 disabled={busy}
                                 onClick={() => choose({ provider: entry.group.id, model: model.id })}
                               >
-                                <span className="dsh-proto-model-name">{model.name}</span>
-                                <span className="dsh-proto-check">{pending ? '…' : selected ? '✓' : ''}</span>
+                                <span className="dsh-model-seat-model-name">{model.name}</span>
+                                <span className="dsh-model-seat-check">{pending ? '…' : selected ? '✓' : ''}</span>
                               </button>
                               <button
                                 type="button"
-                                className="dsh-proto-star"
+                                className="dsh-model-seat-star"
                                 data-on={favorite}
                                 aria-label={favorite ? '取消收藏' : '收藏'}
                                 title={favorite ? '取消收藏' : '收藏'}
@@ -501,7 +504,7 @@ export function ModelSeatProto(props: ProtoSeatProps): ReactElement | null {
                       </div>
                     ))}
                     {visibleGroups.length === 0 && (
-                      <div className="dsh-proto-hint">
+                      <div className="dsh-model-seat-hint">
                         {tab === FAVORITES_TAB
                           ? '还没有收藏的模型。'
                           : query.trim().length > 0 ? '没有匹配的模型。' : state.status === 'loading' ? '' : '暂无可用模型。'}
@@ -509,7 +512,7 @@ export function ModelSeatProto(props: ProtoSeatProps): ReactElement | null {
                     )}
                   </>
                 )}
-                {error !== null && <div className="dsh-proto-error">{error}</div>}
+                {error !== null && <div className="dsh-model-seat-error">{error}</div>}
               </div>
             </div>
           )}
