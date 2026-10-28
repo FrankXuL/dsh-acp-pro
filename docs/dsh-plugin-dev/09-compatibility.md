@@ -64,3 +64,11 @@ composer 的 `conversation.input.model` 座位由本插件以更低 `priority` �
 - 影子期间第三方 `conversation.input.model.label` 徽标失效（子插槽不能重复声明）。
 
 **复核触发条件**：DSH 升级到新的 minor（0.2 → 0.3）或 `ui-model-selection` / `ui-slots` / `ui-renderer` 任一包有变更时，必须重跑规格里的真机验收清单（见 [`.scratch/model-picker-ui/spec.md`](../../.scratch/model-picker-ui/spec.md) §9），并把结论追加到本节。
+
+### 复核记录
+
+| 日期 | DSH 版本 | 结果 | 备注 |
+| --- | --- | --- | --- |
+| 2026-10-28 | 0.2.1-rc.3（web 壳） | 通过 | 首次真机验收。影子座位接管成功、rail 与两级菜单正常、收藏写进 profile 配置、380px 窄视口无溢出、provider mark 正常渲染。验收中修的三个缺陷（坐标不跟随、宽度自我锁定、左对齐溢出）见 `src/client/service/model-seat-anchor.ts` 与提交 `2798aed` / `8da75c1` |
+
+复核方法：按 [`.scratch/model-picker-ui/spec.md`](../../.scratch/model-picker-ui/spec.md) §9 的真机清单逐项执行，结论回填到该文件 §11。

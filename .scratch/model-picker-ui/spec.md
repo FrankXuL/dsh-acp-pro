@@ -1,6 +1,6 @@
 <!-- DSH-FORMAT: md-v1 -->
 <!-- DSH-TITLE: 模型选择器：图标来源 rail、ACP 启停与模型收藏 -->
-<!-- DSH-STATUS: ready-for-agent -->
+<!-- DSH-STATUS: done -->
 <!-- DSH-LABELS: ready-for-agent -->
 <!-- DSH-IDEMPOTENCY-KEY: deck-8e29d6dd-5977259 -->
 <!-- DSH-CREATED: 2026-10-28T08:56:42.949Z -->
@@ -187,14 +187,37 @@
 | 影子是引擎行为 | 上游无版本协商，升级可能改排序/渲染规则 | 只依赖 `priority` 与 `slots.inject`；注册 try/catch；升级跑验收清单 |
 | `label` 槽失效 | 第三方模型名徽标在本选择器内不显示 | 已接受；tab + 收藏承担来源表达 |
 | inject 漏列依赖 | 静默退役、表现为「完全不生效」 | inject 列表写全；验收第一步查 console `slot entry crashed` |
-| 卡片固定尺寸 | 窄视口（<640px）未实测 | 保留 `max-width: calc(100vw - 32px)` 兜底；小屏待验 |
+| 卡片固定尺寸 | 390px 以上按设计宽度；更窄时靠 `max-width` 收缩（380px 已实测无溢出） | `anchorFor` 用视口减两侧 margin 兜底，并保留每 pane 的最小宽度 |
 | `favorites` 写入频率 | 每点一次星写一次配置 | mutate 合并/串行；只在需要时写 |
 
-## 11. 未实测 / 待补
+## 11. 真机验收结果（2026-10-28）
 
-- 窄视口下的固定卡片降级形态。
-- URL 图标在 web 壳 CSP 下的行为。
+在本机 DSH 0.2.1-rc.3 + web 壳上逐项验证：
+
+| 项 | 做法 | 结果 |
+| --- | --- | --- |
+| 收藏持久化 | 在活体 DSH 点 ☆ 收藏模型，随后读 profile 配置 | ✅ `cordis.patch.yml` 出现 `favorites: [{provider, model}]`；收藏 tab 同步；重启不丢（写配置而非 localStorage） |
+| 窄视口 | 600px 与 380px 两档压测卡片位置 | ✅ 600px：340×360 @ x=152（right=492<600）；380px：x=8（right=348<380），横纵向溢出均为 0 |
+| URL / emoji 图标 | 直接跑 `resolveSourceIcon` 七种输入 | ✅ `https://` / 协议相对 / 相对路径 → url；emoji → emoji；内置名与 displayName 识别 → builtin |
+| 面板跟随 | 拖动侧边栏与模拟 trigger 位移 | ✅ 逐帧跟随（直接写 DOM style，无过渡动画）；右对齐 trigger，不溢出视口 |
+| 真实 provider 图标 | rail 与 trigger 实际渲染 | ✅ 平台用原生 fish 轮廓；ACP 用自带 provider mark（彩色 img / 单色 mask）；无 mark 回退首字母 |
+
+**追加修复（验收中发现，已入库）**
+
+- 拖动侧边栏时面板不跟随：`resize` / `ResizeObserver` 都不监听位置变化 → 改为面板打开期间逐帧比对 trigger rect，并直接写 DOM style 绕开 React 渲染；同时清掉面板继承的 `transition: all`。
+- 内框越用越窄：夹窄后的实测宽度被当成下一帧输入，形成自我锁定 → 量宽度前先清 `max-width` 取自然宽度，`anchorFor` 增加每 pane 的 `minWidth` 下限，pane 切换丢弃过期测量。
+- 面板相对 trigger 左对齐导致右侧溢出 → 改为右对齐（与原生选择器一致）。
+
+**仍待补**
+
 - 插件卸载/重装后的选择记忆与默认回退（边界行为，实现时定）。
-- 中英文案：当前硬编码中文，`t()` 化待补。
+- 中英文案：选择器文案当前硬编码中文，`t()` 化待补。
+- URL 图标在严格 CSP 下的加载失败表现（本机 CSP 允许 data URI 与 https，未构造拒绝场景）。
+
+## 收口
+
+规格的 6 张实施票全部关闭（`e371943` / `d2dc778` / `36e54e5` / `0c221c0` / `66c137d` / `f99da57`），
+真机验收结论见 §11，兼容复核已记录到 [`docs/dsh-plugin-dev/09-compatibility.md`](../../docs/dsh-plugin-dev/09-compatibility.md)。
+本规格到此收口。
 
 ## 进度
