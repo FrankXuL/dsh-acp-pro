@@ -14,6 +14,8 @@ import { favoriteKey, favoritesOf as configuredFavorites, toggleFavoriteOps } fr
 import type { AgentProfileView, SourceIcon } from '../service/model-seat-sources.ts'
 import { agentProfilesOf, resolveSourceIcon, sourceRoutes } from '../service/model-seat-sources.ts'
 import { MONOCHROME_PROVIDERS, providerIconUrl } from '../assets/provider-icons.ts'
+import { anchorFor, rectMoved } from '../service/model-seat-anchor.ts'
+import type { PanelAnchor, Rect } from '../service/model-seat-anchor.ts'
 import { FISH_LOGO_PATH, FISH_LOGO_VIEWBOX } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 
@@ -182,9 +184,13 @@ export function ModelSeat(props: ModelSeatProps): ReactElement | null {
   const [query, setQuery] = useState('')
   const [error, setError] = useState<string | null>(null)
   const favorites = useMemo(() => configuredFavorites(configSnapshot), [configSnapshot])
-  const [anchor, setAnchor] = useState<{ left: number, bottom: number, maxHeight: number } | null>(null)
+  const [anchor, setAnchor] = useState<PanelAnchor | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
+  /** Last measured trigger rect, so a layout shift can be compared across observers. */
+  const lastTriggerRect = useRef<Rect | undefined>(undefined)
+  /** Panel size the last pane rendered at; the anchor clamps against the real box, not a guess. */
+  const lastPanelSize = useRef<{ width: number, height: number } | undefined>(undefined)
 
   const agents = useMemo(() => agentProfilesOf(configSnapshot), [configSnapshot])
   const routes = useMemo(() => sourceRoutes(configSnapshot), [configSnapshot])
@@ -253,17 +259,31 @@ export function ModelSeat(props: ModelSeatProps): ReactElement | null {
     void form.mutate(ops)
   }, [form])
 
-  const reposition = useCallback(() => {
-    const rect = triggerRef.current?.getBoundingClientRect()
-    if (rect === undefined)
+  const reposition = useCallback((force = false): void => {
+    const trigger = triggerRef.current?.getBoundingClientRect()
+    if (trigger === undefined)
       return
-    const width = pane === 'root' || pane === 'efforts' ? 280 : 440
-    setAnchor({
-      left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
-      bottom: Math.max(8, window.innerHeight - rect.top + 8),
-      maxHeight: Math.max(160, Math.min(440, rect.top - 16)),
-    })
+    const rect: Rect = { left: trigger.left, right: trigger.right, top: trigger.top, bottom: trigger.bottom, width: trigger.width, height: trigger.height }
+    // The composer moves on its own too (sidebar drag, transcript growth, window resize), so an
+    // unchanged trigger still needs a re-anchor when the panel size changed.
+    const panel = panelRef.current?.getBoundingClientRect()
+    const size = panel === undefined || panel.width === 0
+      ? undefined
+      : { width: panel.width, height: panel.height }
+    const sizeChanged = size !== undefined && lastPanelSize.current !== undefined
+      && (size.width !== lastPanelSize.current.width || size.height !== lastPanelSize.current.height)
+    if (!force && !sizeChanged && !rectMoved(lastTriggerRect.current, rect))
+      return
+    lastTriggerRect.current = rect
+    if (size !== undefined)
+      lastPanelSize.current = size
+    setAnchor(anchorFor(rect, { width: window.innerWidth, height: window.innerHeight }, size ?? measuredPanelSize(pane)))
   }, [pane])
+
+/** Panel size per pane; only used until the real box has been measured once. */
+function measuredPanelSize(pane: Pane): { width: number, height: number } {
+  return pane === 'models' ? { width: 340, height: 360 } : { width: 240, height: 120 }
+}
 
   const openMenu = useCallback(() => {
     setPane('root')
@@ -279,19 +299,12 @@ export function ModelSeat(props: ModelSeatProps): ReactElement | null {
     })
   }, [directory])
 
+  // The first render on a new pane uses a fallback size; measuring the real box immediately after
+  // replaces it, which is what keeps a wide pane from hanging off the viewport edge.
   useEffect(() => {
-    if (!open)
-      return
-    const rect = triggerRef.current?.getBoundingClientRect()
-    if (rect !== undefined) {
-      const width = pane === 'root' || pane === 'efforts' ? 280 : 440
-      setAnchor({
-        left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
-        bottom: Math.max(8, window.innerHeight - rect.top + 8),
-        maxHeight: Math.max(160, Math.min(440, rect.top - 16)),
-      })
-    }
-  }, [open, pane])
+    if (open)
+      reposition()
+  }, [open, pane, reposition])
 
   useEffect(() => {
     if (!open)
@@ -312,11 +325,28 @@ export function ModelSeat(props: ModelSeatProps): ReactElement | null {
       else
         setOpen(false)
     }
-    window.addEventListener('resize', reposition)
+    const onLayoutChange = (): void => reposition()
+    // A dragged sidebar moves the composer without resizing it and without any event: neither
+    // `resize` nor ResizeObserver fires. Watching the trigger's rect every frame is the only way
+    // to keep the fixed-position panel glued to it while a drag is in progress.
+    let frame = 0
+    const follow = (): void => {
+      reposition()
+      frame = requestAnimationFrame(follow)
+    }
+    frame = requestAnimationFrame(follow)
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(onLayoutChange)
+    if (observer !== undefined && triggerRef.current !== null)
+      observer.observe(triggerRef.current)
+    window.addEventListener('resize', onLayoutChange)
+    document.addEventListener('scroll', onLayoutChange, true)
     document.addEventListener('mousedown', onPointerDown, true)
     document.addEventListener('keydown', onKeyDown)
     return () => {
-      window.removeEventListener('resize', reposition)
+      cancelAnimationFrame(frame)
+      observer?.disconnect()
+      window.removeEventListener('resize', onLayoutChange)
+      document.removeEventListener('scroll', onLayoutChange, true)
       document.removeEventListener('mousedown', onPointerDown, true)
       document.removeEventListener('keydown', onKeyDown)
     }
@@ -380,7 +410,7 @@ export function ModelSeat(props: ModelSeatProps): ReactElement | null {
           aria-label="模型与推理"
           className="dsh-model-seat-panel"
           data-pane={pane}
-          style={{ left: anchor.left, bottom: anchor.bottom, maxHeight: anchor.maxHeight }}
+          style={{ left: anchor.left, bottom: anchor.bottom, maxHeight: anchor.maxHeight, maxWidth: anchor.maxWidth }}
         >
           {pane === 'root' && (
             <div className="dsh-model-seat-root">
