@@ -9,7 +9,9 @@ const MODELS = { width: 340, height: 360 }
 describe('anchorFor', () => {
   it('opens upward above the trigger without touching the viewport edges', () => {
     const anchor = anchorFor(TRIGGER, VIEWPORT, MODELS)
-    expect(anchor.left).toBe(300)
+    // Right-aligned to the trigger, like the native picker: the panel's right edge tracks the
+    // trigger's right edge rather than its left edge.
+    expect(anchor.left).toBe(TRIGGER.right - MODELS.width)
     expect(anchor.bottom).toBe(800 - 600 + TRIGGER_GAP)
     expect(anchor.maxHeight).toBe(360)
   })
@@ -18,11 +20,22 @@ describe('anchorFor', () => {
     // The sidebar opening/closing moves the composer; a trigger pushed right must not push the
     // panel past the viewport.
     const anchor = anchorFor({ ...TRIGGER, left: 1150, right: 1190 }, VIEWPORT, MODELS)
-    expect(anchor.left).toBe(1200 - 340 - VIEWPORT_MARGIN)
+    // Still right-aligned to the trigger: 1190 - 340 = 850, comfortably inside the 8px margin.
+    expect(anchor.left).toBe(1190 - MODELS.width)
     expect(anchor.left + MODELS.width).toBeLessThanOrEqual(VIEWPORT.width - VIEWPORT_MARGIN)
   })
 
+  it('stays right-aligned on a narrow viewport instead of shrinking the card', () => {
+    // The sidebar-drag symptom: a 340px card above a right-hand trigger used to be left-aligned,
+    // overflow the edge, and get clamped down to 240px — visibly shrinking the inner layout.
+    const anchor = anchorFor({ ...TRIGGER, left: 482, right: 642 }, { width: 756, height: 469 }, MODELS)
+    expect(anchor.maxWidth).toBe(MODELS.width)
+    expect(anchor.left).toBe(642 - 340)
+    expect(anchor.left + anchor.maxWidth).toBeLessThanOrEqual(756 - VIEWPORT_MARGIN)
+  })
+
   it('does not go negative when the composer is dragged to the left edge', () => {
+    // Right-aligned would place it at 160-340 < 0, so it pins to the left margin.
     expect(anchorFor({ ...TRIGGER, left: 0, right: 160 }, VIEWPORT, MODELS).left).toBe(VIEWPORT_MARGIN)
   })
 
@@ -42,15 +55,7 @@ describe('anchorFor', () => {
     expect(anchor.left).toBe(VIEWPORT_MARGIN)
   })
 
-  it('shrinks the width instead of hanging past the right edge on a narrow viewport', () => {
-    // 756px viewport, 340px panel, trigger on the right: clamping only `left` leaves the panel
-    // 66px outside the viewport, which is exactly the sidebar-drag symptom.
-    const anchor = anchorFor({ ...TRIGGER, left: 482, right: 642 }, { width: 756, height: 469 }, MODELS)
-    expect(anchor.left).toBe(756 - 340 - VIEWPORT_MARGIN)
-    expect(anchor.left + MODELS.width).toBeLessThanOrEqual(756 - VIEWPORT_MARGIN)
-    // The panel still fits, so it keeps its width; the fix is the clamped `left`.
-    expect(anchor.maxWidth).toBe(MODELS.width)
-    // Only a viewport narrower than the panel shrinks it.
+  it('only shrinks the width when the viewport itself is narrower than the panel', () => {
     expect(anchorFor({ ...TRIGGER, left: 100 }, { width: 300, height: 700 }, MODELS).maxWidth).toBe(300 - VIEWPORT_MARGIN * 2)
   })
 
@@ -103,5 +108,38 @@ describe('dragging the sidebar', () => {
     }
     expect(moved).toEqual([true, true, true, true])
     expect(rectMoved(previous, { ...previous! })).toBe(false)
+  })
+})
+
+describe('repeat anchoring', () => {
+  it('does not lock the card at a previously clamped width', () => {
+    // The measured size must be the panel's natural width: feeding a clamped box back in would
+    // keep shrinking the card to the root pane's width on every frame.
+    const viewport = { width: 756, height: 469 }
+    const natural = { width: 340, height: 360 }
+    const first = anchorFor({ left: 482, right: 642, top: 341, bottom: 369, width: 160, height: 28 }, viewport, natural)
+    const second = anchorFor({ left: 482, right: 642, top: 341, bottom: 369, width: 160, height: 28 }, viewport, natural)
+    expect(second).toEqual(first)
+    expect(first.maxWidth).toBe(340)
+  })
+})
+
+describe('width floor', () => {
+  const TRIGGER_RIGHT: Rect = { left: 482, right: 642, top: 341, bottom: 369, width: 160, height: 28 }
+  const VIEWPORT_756 = { width: 756, height: 469 }
+
+  it('never shrinks below the pane natural width just because a measurement came back narrow', () => {
+    const anchor = anchorFor(TRIGGER_RIGHT, VIEWPORT_756, { width: 240, height: 360 }, 340)
+    expect(anchor.maxWidth).toBe(340)
+    expect(anchor.left).toBe(642 - 340)
+  })
+
+  it('still shrinks below the natural width when the viewport cannot fit it', () => {
+    const anchor = anchorFor({ ...TRIGGER_RIGHT, left: 100, right: 260 }, { width: 300, height: 700 }, { width: 240, height: 360 }, 340)
+    expect(anchor.maxWidth).toBe(300 - VIEWPORT_MARGIN * 2)
+  })
+
+  it('prefers the measured width when it is wider than the natural one', () => {
+    expect(anchorFor(TRIGGER_RIGHT, VIEWPORT_756, { width: 400, height: 360 }, 340).maxWidth).toBe(400)
   })
 })

@@ -61,7 +61,7 @@ export const MODEL_SEAT_CSS = `
 .dsh-model-seat-trigger:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08))}
 .dsh-model-seat-trigger:disabled{color:var(--dsw-alias-label-dimmed,#777);cursor:default}
 /* Card geometry mirrors the native model menu (ui-model-selection ModelSelect.module.css .menu). */
-.dsh-model-seat-panel{box-sizing:border-box;position:fixed;z-index:1100;display:flex;gap:2px;width:340px;height:360px;max-width:calc(100vw - 32px);max-height:min(360px,calc(100vh - 96px));overflow:hidden;padding:4px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-menu-surface-fill,#232323);backdrop-filter:var(--dsw-menu-backdrop-filter,none);--dsw-elevation-stroke-color:var(--dsw-alias-border-l1,#3a3a3a);box-shadow:var(--dsw-elevation-prominent,0 12px 40px rgba(0,0,0,.45));color:var(--dsw-alias-label-primary,#eee);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2,#555);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2,#777)}
+.dsh-model-seat-panel{box-sizing:border-box;position:fixed;z-index:1100;transition:none;will-change:left,bottom;contain:layout paint;display:flex;gap:2px;width:340px;height:360px;max-width:calc(100vw - 32px);max-height:min(360px,calc(100vh - 96px));overflow:hidden;padding:4px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-menu-surface-fill,#232323);backdrop-filter:var(--dsw-menu-backdrop-filter,none);--dsw-elevation-stroke-color:var(--dsw-alias-border-l1,#3a3a3a);box-shadow:var(--dsw-elevation-prominent,0 12px 40px rgba(0,0,0,.45));color:var(--dsw-alias-label-primary,#eee);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2,#555);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2,#777)}
 .dsh-model-seat-panel[data-pane=root]{width:min(240px,calc(100vw - 32px));height:auto}
 .dsh-model-seat-panel[data-pane=efforts]{width:min(240px,calc(100vw - 32px));height:auto;max-height:min(360px,calc(100vh - 96px))}
 .dsh-model-seat-root{display:flex;flex-direction:column;gap:0;min-width:min(240px,calc(100vw - 32px));padding:2px 0}
@@ -259,6 +259,11 @@ export function ModelSeat(props: ModelSeatProps): ReactElement | null {
     void form.mutate(ops)
   }, [form])
 
+  /**
+   * Re-anchor the panel. During a drag this runs every animation frame, so it writes the fixed
+   * coordinates straight to the DOM: routing each frame through `setState` made React's render lag
+   * behind the pointer by a frame or two, which read as "not tracking".
+   */
   const reposition = useCallback((force = false): void => {
     const trigger = triggerRef.current?.getBoundingClientRect()
     if (trigger === undefined)
@@ -266,10 +271,18 @@ export function ModelSeat(props: ModelSeatProps): ReactElement | null {
     const rect: Rect = { left: trigger.left, right: trigger.right, top: trigger.top, bottom: trigger.bottom, width: trigger.width, height: trigger.height }
     // The composer moves on its own too (sidebar drag, transcript growth, window resize), so an
     // unchanged trigger still needs a re-anchor when the panel size changed.
-    const panel = panelRef.current?.getBoundingClientRect()
-    const size = panel === undefined || panel.width === 0
-      ? undefined
-      : { width: panel.width, height: panel.height }
+    // Measure the panel's natural size: an already-clamped `max-width` would otherwise feed the
+    // previous, narrower box back in and lock the card at the root pane's width.
+    const element = panelRef.current
+    let size: { width: number, height: number } | undefined
+    if (element !== null) {
+      const previousMaxWidth = element.style.maxWidth
+      element.style.maxWidth = 'none'
+      const natural = element.getBoundingClientRect()
+      element.style.maxWidth = previousMaxWidth
+      if (natural.width > 0)
+        size = { width: natural.width, height: natural.height }
+    }
     const sizeChanged = size !== undefined && lastPanelSize.current !== undefined
       && (size.width !== lastPanelSize.current.width || size.height !== lastPanelSize.current.height)
     if (!force && !sizeChanged && !rectMoved(lastTriggerRect.current, rect))
@@ -277,7 +290,24 @@ export function ModelSeat(props: ModelSeatProps): ReactElement | null {
     lastTriggerRect.current = rect
     if (size !== undefined)
       lastPanelSize.current = size
-    setAnchor(anchorFor(rect, { width: window.innerWidth, height: window.innerHeight }, size ?? measuredPanelSize(pane)))
+    const natural = measuredPanelSize(pane)
+    // `max` keeps a measurement taken while the card was clamped from shrinking this pane.
+    const measured = size === undefined ? natural : { width: Math.max(size.width, natural.width), height: Math.max(size.height, natural.height) }
+    const next = anchorFor(rect, { width: window.innerWidth, height: window.innerHeight }, measured, natural.width)
+    // Apply immediately, then keep the React state in step for the next render.
+    if (panelRef.current !== null) {
+      panelRef.current.style.left = `${next.left}px`
+      panelRef.current.style.bottom = `${next.bottom}px`
+      panelRef.current.style.maxHeight = `${next.maxHeight}px`
+      panelRef.current.style.maxWidth = `${next.maxWidth}px`
+    }
+    setAnchor(current => current !== null
+      && current.left === next.left
+      && current.bottom === next.bottom
+      && current.maxHeight === next.maxHeight
+      && current.maxWidth === next.maxWidth
+      ? current
+      : next)
   }, [pane])
 
 /** Panel size per pane; only used until the real box has been measured once. */
@@ -299,11 +329,19 @@ function measuredPanelSize(pane: Pane): { width: number, height: number } {
     })
   }, [directory])
 
-  // The first render on a new pane uses a fallback size; measuring the real box immediately after
-  // replaces it, which is what keeps a wide pane from hanging off the viewport edge.
+  // A pane switch changes the card's natural size, so stale measurements must not be reused: drop
+  // them and re-anchor with the new pane's own width (the models card must not inherit the root
+  // pane's narrow box).
   useEffect(() => {
-    if (open)
-      reposition()
+    lastPanelSize.current = undefined
+    lastTriggerRect.current = undefined
+    if (open) {
+      reposition(true)
+      // The panel is only measurable after this render; re-anchor once more on the next frame.
+      const frame = requestAnimationFrame(() => reposition(true))
+      return () => cancelAnimationFrame(frame)
+    }
+    return undefined
   }, [open, pane, reposition])
 
   useEffect(() => {

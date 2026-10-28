@@ -45,15 +45,25 @@ function clamp(value: number, low: number, high: number): number {
  * @param trigger - the trigger button's viewport rect.
  * @param viewport - current viewport size.
  * @param size - the panel's measured (or expected) size.
+ * @param minWidth - the pane's natural width. A measurement can come back narrower than the pane
+ * really is (an already-clamped box, a throttled re-measure); never shrink below this unless the
+ * viewport leaves no room, so the card cannot lock itself at a previously clamped width.
  * @returns fixed-position coordinates: `left`, distance of the panel's bottom above the viewport
  * bottom (`bottom`), and the height the panel may occupy before it reaches the viewport top.
  */
-export function anchorFor(trigger: Rect, viewport: Viewport, size: { width: number, height: number }): PanelAnchor {
+export function anchorFor(
+  trigger: Rect,
+  viewport: Viewport,
+  size: { width: number, height: number },
+  minWidth = 0,
+): PanelAnchor {
   const room = Math.max(0, viewport.width - VIEWPORT_MARGIN * 2)
   // A panel wider than the viewport shrinks; otherwise it is pinned so its right edge stays inside.
-  const maxWidth = Math.min(size.width, room)
+  const maxWidth = Math.min(Math.max(size.width, minWidth), room)
   const maxLeft = viewport.width - maxWidth - VIEWPORT_MARGIN
-  const left = clamp(trigger.left, VIEWPORT_MARGIN, maxLeft)
+  // Right-aligned to the trigger, matching the native picker: the card grows leftward from the
+  // trigger's right edge, so a right-hand composer never pushes it off screen or squashes it.
+  const left = clamp(trigger.right - maxWidth, VIEWPORT_MARGIN, maxLeft)
   const bottom = Math.max(VIEWPORT_MARGIN, viewport.height - trigger.top + TRIGGER_GAP)
   const availableAbove = trigger.top - TRIGGER_GAP - VIEWPORT_MARGIN
   const maxHeight = Math.max(MIN_PANEL_HEIGHT, Math.min(size.height, availableAbove))
