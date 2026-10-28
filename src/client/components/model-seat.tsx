@@ -11,12 +11,25 @@ import type {
   AcpModelFavorite, ConfigForm, ConfigFormSnapshot, ModelDirectoryFacade, ModelDirectoryState, ModelInfo, ModelProviderGroup, ModelSelection,
 } from '../types/runtime.ts'
 import { favoriteKey, favoritesOf as configuredFavorites, toggleFavoriteOps } from '../service/favorites.ts'
+import { SourceIcon as SourceGlyph, tabName } from '../view/model-seat/rail.tsx'
+import { ModelList } from '../view/model-seat/list.tsx'
+
+import {
+  DSH_TAB as SELECTION_DSH_TAB,
+  FAVORITES_TAB as SELECTION_FAVORITES_TAB,
+  effortName,
+  isAcpSelection,
+  modelMatcher,
+  modelOf,
+  modelsForTab,
+  showsSearch,
+  tabIdsOf,
+  visibleGroupsOf,
+} from '../service/selection.ts'
 import type { AgentProfileView, SourceIcon } from '../service/model-seat-sources.ts'
-import { agentProfilesOf, resolveSourceIcon, sourceRoutes } from '../service/model-seat-sources.ts'
-import { MONOCHROME_PROVIDERS, providerIconUrl } from '../assets/provider-icons.ts'
+import { agentProfilesOf, sourceRoutes } from '../service/model-seat-sources.ts'
 import { anchorFor, rectMoved } from '../service/model-seat-anchor.ts'
 import type { PanelAnchor, Rect } from '../service/model-seat-anchor.ts'
-import { FISH_LOGO_PATH, FISH_LOGO_VIEWBOX } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 
 interface ModelSeatProps {
@@ -29,8 +42,8 @@ interface ModelSeatProps {
 
 type Pane = 'root' | 'models' | 'efforts'
 
-const FAVORITES_TAB = '__favorites__'
-const DSH_TAB = 'dsh'
+const FAVORITES_TAB = SELECTION_FAVORITES_TAB
+const DSH_TAB = SELECTION_DSH_TAB
 const FAVORITES_KEY = 'dsh-acp-pro:prototype:favorites'
 
 const EMPTY_STATE: ModelDirectoryState = {
@@ -55,117 +68,6 @@ const EMPTY_CONFIG: ConfigFormSnapshot = {
 
 const NOOP_SUBSCRIBE = (): (() => void) => () => {}
 
-export const MODEL_SEAT_CSS = `
-.dsh-model-seat{display:inline-flex;position:relative}
-.dsh-model-seat-trigger{display:inline-flex;align-items:center;gap:5px;height:28px;background:none;border:none;border-radius:var(--dsw-radius-md,12px);color:var(--dsw-alias-label-primary,#eee);cursor:pointer;font:inherit;font-size:13px;padding:0 4px 0 8px;max-width:100%}
-.dsh-model-seat-trigger:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08))}
-.dsh-model-seat-trigger:disabled{color:var(--dsw-alias-label-dimmed,#777);cursor:default}
-/* Card geometry mirrors the native model menu (ui-model-selection ModelSelect.module.css .menu). */
-.dsh-model-seat-panel{box-sizing:border-box;position:fixed;z-index:1100;transition:none;will-change:left,bottom;contain:layout paint;display:flex;gap:2px;width:340px;height:360px;max-width:calc(100vw - 32px);max-height:min(360px,calc(100vh - 96px));overflow:hidden;padding:4px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-menu-surface-fill,#232323);backdrop-filter:var(--dsw-menu-backdrop-filter,none);--dsw-elevation-stroke-color:var(--dsw-alias-border-l1,#3a3a3a);box-shadow:var(--dsw-elevation-prominent,0 12px 40px rgba(0,0,0,.45));color:var(--dsw-alias-label-primary,#eee);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2,#555);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2,#777)}
-.dsh-model-seat-panel[data-pane=root]{width:min(240px,calc(100vw - 32px));height:auto}
-.dsh-model-seat-panel[data-pane=efforts]{width:min(240px,calc(100vw - 32px));height:auto;max-height:min(360px,calc(100vh - 96px))}
-.dsh-model-seat-root{display:flex;flex-direction:column;gap:0;min-width:min(240px,calc(100vw - 32px));padding:2px 0}
-.dsh-model-seat-rail{display:flex;flex-direction:column;align-items:center;gap:2px;width:32px;flex:none;padding:2px 0;overflow-y:auto}
-.dsh-model-seat-rail-btn{width:28px;height:28px;flex:none;display:flex;align-items:center;justify-content:center;background:none;border:none;border-radius:var(--dsw-radius-md,12px);color:var(--dsw-alias-label-tertiary,#999);cursor:pointer;font:inherit}
-.dsh-model-seat-rail-btn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08));color:var(--dsw-alias-label-primary,#eee)}
-.dsh-model-seat-rail-btn[data-active=true]{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08));color:var(--dsw-alias-label-primary,#fff)}
-.dsh-model-seat-rail-btn[data-fav=true][data-active=true]{color:var(--dsw-alias-state-warning-primary,#f5c542)}
-.dsh-model-seat-rail-glyph{font-size:12px;font-weight:600;line-height:1}
-.dsh-model-seat-trigger-icon{display:inline-flex;align-items:center;justify-content:center;flex:none;width:16px;height:16px;color:var(--dsw-alias-label-secondary,#bbb)}
-.dsh-model-seat-brand{display:block;width:16px;height:16px;background:currentColor;mask-position:center;mask-repeat:no-repeat;mask-size:contain;-webkit-mask-position:center;-webkit-mask-repeat:no-repeat;-webkit-mask-size:contain}
-.dsh-model-seat-brand-img{display:block;width:16px;height:16px;object-fit:contain}
-.dsh-model-seat-divider{width:16px;height:1px;flex:none;background:var(--dsw-alias-border-l2,#333);margin:2px 0}
-.dsh-model-seat-body{flex:1;min-width:180px;max-width:340px;min-height:0;display:flex;flex-direction:column}
-.dsh-model-seat-search{box-sizing:border-box;flex:none;width:100%;height:auto;margin:2px 0 3px;padding:5px 7px;border:0 solid transparent;border-radius:var(--dsw-radius-md,12px);background:transparent;color:inherit;font:inherit;font-size:12px;outline:none}
-.dsh-model-seat-search::placeholder{color:var(--dsw-alias-label-caption,#8a8a8a)}
-.dsh-model-seat-list{display:flex;flex-direction:column;min-height:0;flex:1 1 auto;overflow-y:auto}
-.dsh-model-seat-group{position:sticky;top:0;z-index:1;padding:4px 7px 2px;background:var(--dsw-alias-menu-group-header-fill,rgba(48,49,54,.94));color:var(--dsw-alias-label-tertiary,#8a8a8a);font-size:11px;line-height:16px;font-weight:500}
-.dsh-model-seat-row{display:flex;align-items:center;gap:2px;min-width:100%}
-.dsh-model-seat-model{box-sizing:border-box;flex:1;min-width:0;display:flex;align-items:center;gap:6px;min-height:34px;padding:5px 7px;border:none;border-radius:var(--dsw-radius-md,12px);background:transparent;color:inherit;cursor:pointer;font:inherit;text-align:left;outline:none}
-.dsh-model-seat-model:hover,.dsh-model-seat-model:focus-visible{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08))}
-.dsh-model-seat-model:disabled{color:var(--dsw-alias-label-dimmed,#777);cursor:default}
-.dsh-model-seat-model-name{flex:1;min-width:0;overflow:hidden;color:inherit;font-size:13px;line-height:18px;font-weight:400;text-overflow:ellipsis;white-space:nowrap}
-.dsh-model-seat-check{flex:0 0 14px;display:grid;place-items:center;color:var(--dsw-alias-label-primary,#eee);font-size:13px}
-.dsh-model-seat-star{flex:none;width:24px;height:24px;display:grid;place-items:center;padding:0;border:none;border-radius:50%;background:transparent;color:var(--dsw-alias-label-tertiary,#8a8a8a);cursor:pointer;font-size:13px;opacity:0}
-.dsh-model-seat-row:hover .dsh-model-seat-star,.dsh-model-seat-star[data-on=true],.dsh-model-seat-star:focus-visible{opacity:1}
-.dsh-model-seat-star:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08));color:var(--dsw-alias-label-primary,#eee)}
-.dsh-model-seat-star[data-on=true]{color:var(--dsw-alias-state-warning-primary,#f5c542)}
-/* Root cells mirror .cell: 34px high, 0 8px padding, 13/20 text. */
-.dsh-model-seat-cell{box-sizing:border-box;display:flex;align-items:center;gap:6px;width:auto;min-width:100%;height:34px;padding:0 8px;border:none;border-radius:var(--dsw-radius-md,12px);background:transparent;color:inherit;font:inherit;font-size:13px;line-height:20px;cursor:pointer;text-align:left;outline:none}
-.dsh-model-seat-cell:hover,.dsh-model-seat-cell:focus-visible{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08))}
-.dsh-model-seat-cell-label{flex:0 0 auto;white-space:nowrap}
-.dsh-model-seat-cell-value{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:var(--dsw-alias-label-tertiary,#8a8a8a)}
-.dsh-model-seat-cell-chevron{flex:0 0 auto;width:12px;height:12px;color:var(--dsw-alias-menu-icon,#8a8a8a)}
-.dsh-model-seat-hint{padding:8px;color:var(--dsw-alias-label-tertiary,#8a8a8a);font-size:12px;line-height:18px}
-.dsh-model-seat-error{padding:6px 7px;border-radius:var(--dsw-radius-md,12px);background:var(--dsw-alias-interactive-bg-hover-danger,rgba(255,80,80,.14));color:var(--dsw-alias-state-error-primary,#f66);font-size:11px;line-height:16px}
-.dsh-model-seat-rail-slot{display:contents}
-`
-
-function groupOf(groups: readonly ModelProviderGroup[], id: string): ModelProviderGroup | undefined {
-  return groups.find(group => group.id === id)
-}
-
-function modelOf(groups: readonly ModelProviderGroup[], selection: ModelSelection | null): ModelInfo | undefined {
-  if (selection === null)
-    return undefined
-  return groupOf(groups, selection.provider)?.models.find(model => model.id === selection.model)
-}
-
-function effortName(model: ModelInfo | undefined, effortId: string | undefined): string | undefined {
-  if (model === undefined || effortId === undefined)
-    return undefined
-  return model.reasoning?.efforts.find(effort => effort.id === effortId)?.name ?? effortId
-}
-
-/** Minimal inline glyph per source; brand-ish marks by name, then a letter fallback. */
-const FAVORITES_ICON = <path d="M12 3.7l2.55 5.17 5.7.83-4.12 4.02.97 5.68L12 16.72l-5.1 2.68.97-5.68L3.75 9.7l5.7-.83z" />
-/** The platform source is DSH itself, so its mark is the native fish silhouette. */
-function PlatformIcon(): ReactElement {
-  return (
-    <svg
-      width={17}
-      height={17}
-      viewBox={`0 0 ${FISH_LOGO_VIEWBOX.width} ${FISH_LOGO_VIEWBOX.height}`}
-      fill="none"
-      aria-hidden="true"
-    >
-      <path d={FISH_LOGO_PATH} fill="currentColor" />
-    </svg>
-  )
-}
-
-/** One rail glyph: favorites star, platform mark, or the configured/detected provider mark. */
-function SourceIcon({ tab, agents }: { tab: string, agents: Record<string, AgentProfileView> }): ReactElement {
-  const common = { width: 17, height: 17, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
-  if (tab === FAVORITES_TAB)
-    return <svg {...common} fill="currentColor" stroke="none">{FAVORITES_ICON}</svg>
-  if (tab === DSH_TAB)
-    return <PlatformIcon />
-  const glyph: SourceIcon = resolveSourceIcon(agents[tab] ?? {}, tab)
-  if (glyph.kind === 'builtin') {
-    const url = providerIconUrl(glyph.name)
-    if (url !== undefined) {
-      // Monochrome marks follow the label colour so they survive a light theme; the rest keep
-      // their own colours and are drawn as images.
-      return MONOCHROME_PROVIDERS.has(glyph.name)
-        ? <span className="dsh-model-seat-brand" style={{ maskImage: `url("${url}")`, WebkitMaskImage: `url("${url}")` }} />
-        : <img className="dsh-model-seat-brand-img" src={url} alt="" draggable={false} width={16} height={16} />
-    }
-  }
-  if (glyph.kind === 'url')
-    return <img className="dsh-model-seat-rail-img" src={glyph.url} alt="" width={16} height={16} />
-  if (glyph.kind === 'builtin')
-    return <span className="dsh-model-seat-rail-glyph">{glyph.name.slice(0, 1).toUpperCase()}</span>
-  return <span className="dsh-model-seat-rail-glyph">{glyph.text}</span>
-}
-
-function tabName(tab: string, agents: Record<string, AgentProfileView>): string {
-  if (tab === FAVORITES_TAB)
-    return '收藏'
-  if (tab === DSH_TAB)
-    return 'DSH'
-  return agents[tab]?.displayName ?? tab
-}
 
 export function ModelSeat(props: ModelSeatProps): ReactElement | null {
   const directory = props.models
@@ -197,8 +99,8 @@ export function ModelSeat(props: ModelSeatProps): ReactElement | null {
   const groupById = useMemo(() => new Map(state.groups.map(group => [group.id, group])), [state.groups])
   const failureById = useMemo(() => new Map(state.failures.map(failure => [failure.id, failure])), [state.failures])
   const tabIds = useMemo(
-    () => [FAVORITES_TAB, DSH_TAB, ...routes.filter(route => groupById.has(route) || failureById.has(route))],
-    [failureById, groupById, routes],
+    () => tabIdsOf(state.groups, state.failures, agents),
+    [agents, state.failures, state.groups],
   )
   useEffect(() => {
     if (!tabIds.includes(tab))
@@ -214,40 +116,22 @@ export function ModelSeat(props: ModelSeatProps): ReactElement | null {
     () => new Set(favorites.map(item => favoriteKey(item.provider, item.model))),
     [favorites],
   )
-  const isAcpCurrent = current !== null && routes.includes(current.provider)
+  const isAcpCurrent = isAcpSelection(current, routes)
 
-  const matches = useCallback((model: ModelInfo): boolean => {
-    const needle = query.trim().toLowerCase()
-    return needle.length === 0 || model.name.toLowerCase().includes(needle)
-  }, [query])
+  const matches = useMemo(() => modelMatcher(query), [query])
 
-  const sourceModels = useMemo(() => {
-    if (tab === FAVORITES_TAB) {
-      return state.groups.flatMap(group =>
-        group.models
-          .filter(model => favoriteSet.has(favoriteKey(group.id, model.id)))
-          .map(model => ({ group, model })),
-      )
-    }
-    const inSource = state.groups.filter(group => tab === DSH_TAB ? !routes.includes(group.id) : group.id === tab)
-    return inSource.flatMap(group => group.models.map(model => ({ group, model })))
-  }, [favoriteSet, routes, state.groups, tab])
+  const sourceModels = useMemo(
+    () => modelsForTab(tab, state.groups, routes, favoriteSet),
+    [favoriteSet, routes, state.groups, tab],
+  )
 
-  const visibleGroups = useMemo(() => {
-    const filtered = sourceModels.filter(({ model }) => matches(model))
-    const byGroup = new Map<string, { group: ModelProviderGroup, models: ModelInfo[] }>()
-    for (const { group, model } of filtered) {
-      const entry = byGroup.get(group.id) ?? { group, models: [] }
-      entry.models.push(model)
-      byGroup.set(group.id, entry)
-    }
-    return [...byGroup.values()]
-  }, [matches, sourceModels])
+  const visibleGroups = useMemo(
+    () => visibleGroupsOf(sourceModels.filter(({ model }) => matches(model))),
+    [matches, sourceModels],
+  )
 
-  // Native rule: search appears when the full catalog exceeds four models (not per source),
-  // so a small ACP tab inside a large catalog still gets a search entry.
-  const totalModels = useMemo(() => state.groups.reduce((count, group) => count + group.models.length, 0), [state.groups])
-  const showSearch = totalModels > 4
+  // Native rule: search appears when the full catalog exceeds four models, not per source.
+  const showSearch = useMemo(() => showsSearch(state.groups), [state.groups])
   const tabFailure = tab !== DSH_TAB && tab !== FAVORITES_TAB ? failureById.get(tab) : undefined
 
   const toggleFavorite = useCallback((provider: string, model: string) => {
@@ -437,7 +321,7 @@ function measuredPanelSize(pane: Pane): { width: number, height: number } {
         title="选择模型与推理等级"
       >
         <span className="dsh-model-seat-trigger-icon" aria-hidden="true">
-          <SourceIcon tab={current !== null && routes.includes(current.provider) ? current.provider : DSH_TAB} agents={agents} />
+          <SourceGlyph tab={current !== null && routes.includes(current.provider) ? current.provider : DSH_TAB} agents={agents} />
         </span>
         {triggerText}{busy ? ' …' : ' ▾'}
       </button>
@@ -485,7 +369,7 @@ function measuredPanelSize(pane: Pane): { width: number, height: number } {
                       setQuery('')
                     }}
                   >
-                    <SourceIcon tab={id} agents={agents} />
+                    <SourceGlyph tab={id} agents={agents} />
                   </button>
                 </div>
               ))}
@@ -493,81 +377,43 @@ function measuredPanelSize(pane: Pane): { width: number, height: number } {
           )}
           {pane !== 'root' && (
             <div className="dsh-model-seat-body">
-              {pane === 'models' && showSearch && (
-                <input
-                  className="dsh-model-seat-search"
-                  value={query}
-                  placeholder="搜索当前来源"
-                  onChange={event => setQuery(event.target.value)}
-                />
-              )}
-              <div className="dsh-model-seat-list">
-                {pane === 'efforts' && effortChoices.map(effortOption => (
-                  <div key={effortOption.id} className="dsh-model-seat-row">
-                    <button
-                      type="button"
-                      className="dsh-model-seat-model"
-                      data-selected={currentEffort === effortOption.id}
-                      disabled={busy}
-                      onClick={() => current === null ? undefined : choose({ ...current, reasoningEffort: effortOption.id })}
-                    >
-                      <span className="dsh-model-seat-model-name">{effortOption.name}</span>
-                      <span className="dsh-model-seat-check">{currentEffort === effortOption.id ? '✓' : ''}</span>
-                    </button>
-                  </div>
-                ))}
-                {pane === 'models' && (
-                  <>
-                    {state.status === 'loading' && <div className="dsh-model-seat-hint">加载中…</div>}
-                    {tabFailure !== undefined && <div className="dsh-model-seat-error">{tabFailure.name}：{tabFailure.message}</div>}
-                    {visibleGroups.map(entry => (
-                      <div key={entry.group.id}>
-                        {visibleGroups.length > 1 && <div className="dsh-model-seat-group">{entry.group.name}</div>}
-                              {entry.models.map(model => {
-                          const selected = current !== null && current.provider === entry.group.id && current.model === model.id
-                          const pending = state.pending !== null && state.pending.provider === entry.group.id && state.pending.model === model.id
-                          const favorite = favoriteSet.has(favoriteKey(entry.group.id, model.id))
-                          return (
-                            <div key={model.id} className="dsh-model-seat-row">
-                              <button
-                                type="button"
-                                role="menuitemradio"
-                                className="dsh-model-seat-model"
-                                data-selected={selected}
-                                aria-checked={selected}
-                                disabled={busy}
-                                onClick={() => choose({ provider: entry.group.id, model: model.id })}
-                              >
-                                <span className="dsh-model-seat-model-name">{model.name}</span>
-                                <span className="dsh-model-seat-check">{pending ? '…' : selected ? '✓' : ''}</span>
-                              </button>
-                              <button
-                                type="button"
-                                className="dsh-model-seat-star"
-                                data-on={favorite}
-                                aria-label={favorite ? '取消收藏' : '收藏'}
-                                title={favorite ? '取消收藏' : '收藏'}
-                                disabled={busy}
-                                onClick={() => toggleFavorite(entry.group.id, model.id)}
-                              >
-                                {favorite ? '★' : '☆'}
-                              </button>
-                            </div>
-                          )
-                        })}
+              {pane === 'models'
+                ? (
+                  <ModelList
+                    tab={tab}
+                    query={query}
+                    showSearch={showSearch}
+                    busy={busy}
+                    loading={state.status === 'loading'}
+                    error={error}
+                    failure={tabFailure}
+                    groups={visibleGroups}
+                    current={current}
+                    pending={state.pending}
+                    favoriteSet={favoriteSet}
+                    onQuery={setQuery}
+                    onChoose={choose}
+                    onToggleFavorite={toggleFavorite}
+                  />
+                )
+                : (
+                  <div className="dsh-model-seat-list">
+                    {pane === 'efforts' && effortChoices.map(effortOption => (
+                      <div key={effortOption.id} className="dsh-model-seat-row">
+                        <button
+                          type="button"
+                          className="dsh-model-seat-model"
+                          data-selected={currentEffort === effortOption.id}
+                          disabled={busy}
+                          onClick={() => current === null ? undefined : choose({ ...current, reasoningEffort: effortOption.id })}
+                        >
+                          <span className="dsh-model-seat-model-name">{effortOption.name}</span>
+                          <span className="dsh-model-seat-check">{currentEffort === effortOption.id ? '✓' : ''}</span>
+                        </button>
                       </div>
                     ))}
-                    {visibleGroups.length === 0 && (
-                      <div className="dsh-model-seat-hint">
-                        {tab === FAVORITES_TAB
-                          ? '还没有收藏的模型。'
-                          : query.trim().length > 0 ? '没有匹配的模型。' : state.status === 'loading' ? '' : '暂无可用模型。'}
-                      </div>
-                    )}
-                  </>
+                  </div>
                 )}
-                {error !== null && <div className="dsh-model-seat-error">{error}</div>}
-              </div>
             </div>
           )}
         </div>

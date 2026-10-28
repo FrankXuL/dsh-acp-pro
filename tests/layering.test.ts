@@ -125,7 +125,7 @@ describe('layering', () => {
     const BASELINE = new Map([
       ['src/host/service/acp-adapter.ts', 1488],
       ['src/host/transport/acp-agent.ts', 846],
-      ['src/client/components/model-seat.tsx', 577],
+      ['src/client/components/model-seat.tsx', 423],
     ])
     const regressed: string[] = []
     for (const path of SCHEDULED_SPLITS) {

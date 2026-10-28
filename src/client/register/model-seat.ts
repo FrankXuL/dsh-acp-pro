@@ -15,7 +15,8 @@ import type { AcpClientContext, ModelSelection } from '../types/runtime.ts'
 import { Component, createElement } from 'react'
 import { PLUGIN_ID } from '../../shared/constants.ts'
 import { NS } from '../locales/index.ts'
-import { ModelSeat, MODEL_SEAT_CSS } from '../components/model-seat.tsx'
+import { ModelSeat } from '../components/model-seat.tsx'
+import { MODEL_SEAT_CSS } from '../view/model-seat/styles.ts'
 
 /** A render throw makes the slot engine abdicate the entry permanently; keep it visible. */
 class SeatBoundary extends Component<{ children: ReactNode }, { failed: boolean, message: string }> {
