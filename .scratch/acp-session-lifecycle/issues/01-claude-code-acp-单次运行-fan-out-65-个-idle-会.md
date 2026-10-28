@@ -1,11 +1,11 @@
 <!-- DSH-IDEMPOTENCY-KEY: deck-afbdcbf8-5977070 -->
 <!-- DSH-FORMAT: md-v1 -->
-<!-- DSH-LABELS: needs-triage, needs-info, bug -->
+<!-- DSH-LABELS: bug -->
 # 01: 进程膨胀：单适配器派生 65（第二波 193）个外部 agent 进程，MCP 乘法放大打满 18GB
 
-Labels: bug, needs-triage, needs-info
+Labels: bug
 
-**Status:** needs-triage
+**Status:** resolved
 
 ## 实际
 
@@ -187,6 +187,49 @@ if (ephemeral) {
 ## Comments
 
 ### local — 2026-10-28T02:37:29.716Z
+
+### local — 2026-10-28T05:18:20.603Z
+
+### local — 2026-10-28T05:18:33.359Z
+已修复并验证：提交 74a3940 修掉四处独立成因（探测扇出、discoverModels 会话泄漏、快照读取实体化、进程树残留）。实测 claude 会话 33→1、MCP 进程 254→48；未使用的 agy route 从 2 个泄漏会话降到 1，是关键判据。门禁 tsc 0 / 142 测试全绿，新增 6 个针对性测试且均做过回退对照。剩余「每 route 一套 MCP」属 ACP 协议结构性成本（mcpServers 按 session 传），非泄漏，已记录不在本单范围。
+## 已修复（提交 `74a3940`）
+
+**四个独立成因**，每个都先写失败测试、确认修复前红灯再改代码：
+
+| # | 成因 | 修法 |
+| --- | --- | --- |
+| 1 | 模型目录为**每个模型**各开一个探测会话，且无 in-flight 合流（诊断实测 143 次/启动） | 全部模型共用 1 个探测会话，按队列串行切模型读档位；取消时驱逐已注定失败的 inflight |
+| 2 | `discoverModels` 每次探测新建会话后靠 `session/close` 释放，而 close 在 ACP v1 是**可选**能力——对不实现它的 agent 该调用是空操作，会话连同 MCP 一起残留 | 复用同一探测会话，不再新建 |
+| 3 | 会话面板**每秒轮询**的 `getSessionSnapshots` 会为未实体化的 binding 建会话，且默认透传全部 MCP（**这是「没用 ACP 却在加载」的直接原因**） | 改为纯读取，仅在 agent 支持 `loadSession` 时重放已记录会话 |
+| 4 | `spawn` 未 `detached`，teardown 只 kill 直接子进程，agent 拉起的 MCP 成孤儿 | 自成进程组 + `process.kill(-pid)` 收整棵树 |
+
+### 实测效果
+
+| 指标 | 修复前 | 修复后 |
+| --- | --- | --- |
+| claude 会话 | **33** | **1** |
+| MCP 进程 | **254** | **48** |
+| 未使用过的 `agy` 会话 | 2（泄漏） | **1** |
+
+`agy` 从 2 降到 1 是关键判据：该 route 用户从未使用，说明泄漏已止。
+
+### 验证
+
+- `tsc --noEmit` 0；`vitest run` **23 文件 / 142 测试**全绿
+- 新增 6 个针对性测试：`process-tree` / `ephemeral-serialization` / `ephemeral-mcp` / `effort-probe-fanout` / `snapshot-materialization` / `model-discovery-reuse`
+- 两处做了**回退对照**（临时还原修复，确认断言确实变红），排除恒真测试
+
+### 明确未解决（不在本单范围，已记录）
+
+1. **「每 route 一套 MCP」的结构性成本**：ACP 的 `mcpServers` 按 session 传，跨会话共享 MCP 进程协议层做不到。当前每 route 探测会话仍各带一套 MCP（实测共 48 个进程），这**不是泄漏**。
+2. **长期内存稳定性未验证**：验收只到「会话数与进程数」这一层，内存是否长时间不被打满需要更长观察窗。
+
+### 调研与计划
+
+- `docs/design/acp-lifecycle-oss-research-2026-10-28.md`（Zed / claude-agent-acp / execa / monoCode 一手源码）
+- `docs/design/acp-model-metadata-oss-research-2026-10-28.md`（惰性 vs 立即解析、DSH 服务端对照）
+- `docs/design/acp-session-lifecycle-mechanism-research-2026-10-28.md`（机制判定，含三轮修订）
+- `docs/design/acp-process-bloat-fix-plan-2026-10-28.md`（修复计划，T1–T4 已完成）
 ## 实施进展（2026-10-28）
 
 **T1–T4 已实施并验证**，计划见 [`docs/design/acp-process-bloat-fix-plan-2026-10-28.md`](../../../docs/design/acp-process-bloat-fix-plan-2026-10-28.md)。
@@ -209,7 +252,8 @@ if (ephemeral) {
 
 **未做**：T5（会话租约 TTL）、T6（升级说明/文档）。这两项是兜底与文档，不阻塞峰值修复。
 
-**未验证**：真机冷启动的端到端效果（需在有 claude-code-acp 的环境实测 `pgrep -P` 数量），单元测试只覆盖到 adapter/agent 层行为。
+**真机已验证**（2026-10-28，报告人机器）：冷启动零交互后 claude 会话 33 → 1、MCP 进程 254 → 48；从未使用过的 `agy` route 从 2 个泄漏会话降到 1（关键判据）。
+**仍待观察**：长时间运行的内存稳定性——验收只覆盖会话数与进程数，不是长稳性。
 
 ## 进度
 
