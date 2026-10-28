@@ -34,6 +34,15 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     className?: string | undefined
   }): JSX.Element
 
+  export function Switch(props: {
+    checked: boolean
+    onChange: (next: boolean) => void
+    label: string
+    disabled?: boolean
+    title?: string | undefined
+    className?: string | undefined
+  }): JSX.Element
+
   export type TagTone = 'outline' | 'solid' | 'neutral' | 'quiet' | 'success' | 'info' | 'warning' | 'danger'
 
   export function Tag(props: { tone?: TagTone, className?: string | undefined, children?: ReactNode }): JSX.Element

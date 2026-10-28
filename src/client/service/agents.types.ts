@@ -30,6 +30,10 @@ export interface AgentDraft {
   authMethod: string
   permission: PermissionPolicy
   imageInput: ImageInputMode
+  /** Icon hint for the model picker's source rail (built-in name, emoji or URL). */
+  icon: string
+  /** Whether the route registers as a provider at all. */
+  enabled: boolean
   models: AcpModelProfile[]
 }
 

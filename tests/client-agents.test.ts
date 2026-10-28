@@ -149,3 +149,51 @@ describe('agent settings service', () => {
     expect(await discoverAgentModels({ llm, route: 'draft' })).toEqual({ ok: false, error: 'save ACP agent "draft" first' })
   })
 })
+
+describe('enabled and icon fields', () => {
+  it('carries enabled and icon through the draft and back into the saved profile', () => {
+    const rows = rowsOf(section({
+      agents: { codex: { displayName: 'Codex', command: '/bin/codex-acp', enabled: false, icon: 'codex' } },
+    }))
+    const row = rows.find(candidate => candidate.route === 'codex')!
+    expect(row.profile.enabled).toBe(false)
+    expect(row.profile.icon).toBe('codex')
+
+    const draft = draftOf(row)
+    expect(draft.enabled).toBe(false)
+    expect(draft.icon).toBe('codex')
+
+    const validation = validateDraft({ ...draft, enabled: true, icon: '🦀' }, rows)
+    expect(validation.ok).toBe(true)
+    if (!validation.ok)
+      throw new Error('expected a valid draft')
+    // Enabled is the schema default, so a true value is written as absence rather than noise.
+    expect(validation.profile.enabled ?? true).toBe(true)
+    expect(validation.profile.icon).toBe('🦀')
+  })
+
+  it('omits the icon key when the field is cleared, and writes enabled:false explicitly', () => {
+    const rows = rowsOf(section({ agents: { codex: { command: '/bin/codex-acp', icon: 'codex' } } }))
+    const draft = draftOf(rows[0]!)
+    const validation = validateDraft({ ...draft, icon: '  ', enabled: false }, rows)
+    if (!validation.ok)
+      throw new Error('expected a valid draft')
+    expect('icon' in validation.profile).toBe(false)
+    expect(validation.profile.enabled).toBe(false)
+  })
+
+  it('does not drop an enabled/icon the editor never showed when saving another field', () => {
+    const rows = rowsOf(section({ agents: { codex: { command: '/bin/codex-acp', enabled: false } } }))
+    const draft = draftOf(rows[0]!)
+    const validation = validateDraft({ ...draft, displayName: 'Renamed' }, rows)
+    if (!validation.ok)
+      throw new Error('expected a valid draft')
+    expect(validation.profile.enabled).toBe(false)
+  })
+
+  it('treats an older profile without enabled as enabled', () => {
+    const rows = rowsOf(section({ agents: { legacy: { command: '/bin/legacy', args: ['--acp'] } } }))
+    expect(rows[0]!.profile.enabled).toBe(true)
+    expect(draftOf(rows[0]!).enabled).toBe(true)
+  })
+})

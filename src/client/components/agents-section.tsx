@@ -181,6 +181,7 @@ export function AgentsSection({ form, llm, t }: AgentsSectionProps): ReactElemen
               <span className="dta-name-text">{row.profile.displayName ?? row.route}</span>
               <Tag tone="neutral">{row.route}</Tag>
               {row.inherited && <Tag>{t('inherited')}</Tag>}
+              {row.profile.enabled === false && <Tag tone="quiet">{t('disabledTag')}</Tag>}
               <Tag tone="quiet">
                 {row.profile.models.length > 0 ? t('modelCount', { count: row.profile.models.length }) : t('modelsAuto')}
               </Tag>

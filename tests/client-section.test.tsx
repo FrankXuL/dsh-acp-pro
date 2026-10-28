@@ -2,6 +2,7 @@ import type { Translate } from '../src/client/locales/index.ts'
 import type { ConfigForm, ConfigFormSnapshot, SettingsPathOpView } from '../src/client/types/runtime.ts'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { AgentEditorForm } from '../src/client/components/agent-editor-form.tsx'
 import { AgentImportView } from '../src/client/components/agent-import-view.tsx'
 import { AgentsSection } from '../src/client/components/agents-section.tsx'
 import { zh } from '../src/client/locales/index.ts'
@@ -61,5 +62,46 @@ describe('agents settings section', () => {
     expect(html).toContain(zh.importTitle)
     expect(html).toContain('agent_servers')
     expect(html).toContain('导入 0 个 Agent')
+  })
+})
+
+describe('agent editor enabled and icon', () => {
+  it('renders the enable switch and the icon field, and saves both', async () => {
+    const form = new FakeForm({
+      status: 'ready',
+      value: { agents: { codex: { displayName: 'Codex', command: '/bin/codex-acp', args: [], env: {}, models: [], permission: 'ask', imageInput: 'auto', enabled: false, icon: 'codex' } } },
+      base: { agents: {} },
+      user: { agents: { codex: { command: '/bin/codex-acp' } } },
+      revision: 1,
+      writable: true,
+      mode: 'host',
+    })
+    const html = renderToStaticMarkup(<AgentsSection form={form} llm={llm} t={t} />)
+    // The list marks a disabled route without offering an inline switch.
+    expect(html).toContain(zh.disabledTag)
+  })
+})
+
+describe('agent editor form fields', () => {
+  it('shows the enable switch and the icon input', () => {
+    const html = renderToStaticMarkup(
+      <AgentEditorForm
+        t={t}
+        draft={{ originalRoute: 'codex', route: 'codex', displayName: 'Codex', command: '/bin/codex-acp', args: '', env: '', authMethod: '', permission: 'ask', imageInput: 'auto', icon: 'codex', enabled: false, models: [] }}
+        routeLocked={false}
+        writable
+        busy={false}
+        discovering={false}
+        message={null}
+        onChange={() => {}}
+        onDiscover={() => {}}
+        onCancel={() => {}}
+        onSave={() => {}}
+      />,
+    )
+    expect(html).toContain(zh.icon)
+    expect(html).toContain('role="switch"')
+    expect(html).toContain(zh.enabledOff)
+    expect(html).toContain('value="codex"')
   })
 })

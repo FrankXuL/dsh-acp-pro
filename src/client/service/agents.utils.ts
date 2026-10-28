@@ -4,7 +4,7 @@ import type { AgentDraft, AgentRow, AgentsSnapshot, DraftValidation } from './ag
 import { ROUTE_PATTERN } from '../constants/index.ts'
 
 /** Profile keys the editor owns; everything else in a stored profile is carried over untouched. */
-const EDITED_KEYS = ['displayName', 'command', 'args', 'env', 'authMethod', 'permission', 'imageInput', 'models'] as const
+const EDITED_KEYS = ['displayName', 'command', 'args', 'env', 'authMethod', 'permission', 'imageInput', 'icon', 'enabled', 'models'] as const
 
 type JsonObject = Record<string, JsonValue>
 
@@ -47,6 +47,8 @@ function profileOf(raw: JsonObject): AcpAgentProfile {
   const imageInput = raw.imageInput
   return {
     ...typeof raw.displayName === 'string' ? { displayName: raw.displayName } : {},
+    ...typeof raw.icon === 'string' && raw.icon.trim().length > 0 ? { icon: raw.icon } : {},
+    enabled: raw.enabled !== false,
     command: typeof raw.command === 'string' ? raw.command : '',
     args: stringArrayOf(raw.args),
     env: stringRecordOf(raw.env),
@@ -108,7 +110,20 @@ export function parseEnv(text: string): { ok: true, env: Record<string, string> 
 }
 
 export function emptyDraft(): AgentDraft {
-  return { originalRoute: null, route: '', displayName: '', command: '', args: '', env: '', authMethod: '', permission: 'ask', imageInput: 'auto', models: [] }
+  return {
+    originalRoute: null,
+    route: '',
+    displayName: '',
+    command: '',
+    args: '',
+    env: '',
+    authMethod: '',
+    permission: 'ask',
+    imageInput: 'auto',
+    icon: '',
+    enabled: true,
+    models: [],
+  }
 }
 
 export function draftOf(row: AgentRow): AgentDraft {
@@ -123,6 +138,8 @@ export function draftOf(row: AgentRow): AgentDraft {
     authMethod: profile.authMethod ?? '',
     permission: profile.permission,
     imageInput: profile.imageInput,
+    icon: profile.icon ?? '',
+    enabled: profile.enabled !== false,
     models: profile.models.map(model => ({ ...model })),
   }
 }
@@ -169,6 +186,7 @@ export function validateDraft(draft: AgentDraft, rows: readonly AgentRow[]): Dra
   const carried = Object.fromEntries(Object.entries(previous).filter(([key]) => !(EDITED_KEYS as readonly string[]).includes(key)))
   const displayName = draft.displayName.trim()
   const authMethod = draft.authMethod.trim()
+  const icon = draft.icon.trim()
   const args = parseArgs(draft.args)
   const profile: JsonObject = {
     ...carried,
@@ -179,6 +197,9 @@ export function validateDraft(draft: AgentDraft, rows: readonly AgentRow[]): Dra
     ...authMethod.length > 0 ? { authMethod } : {},
     permission: draft.permission,
     ...draft.imageInput === 'auto' ? {} : { imageInput: draft.imageInput },
+    ...icon.length > 0 ? { icon } : {},
+    // Written explicitly so a disabled route stays disabled after an edit of any other field.
+    ...draft.enabled ? {} : { enabled: false },
     ...draft.models.length > 0 ? { models: draft.models.map(modelJson) } : {},
   }
   return { ok: true, route, profile }

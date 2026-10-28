@@ -3,7 +3,7 @@ import type { ImageInputMode, PermissionPolicy } from '../../shared/types.ts'
 import type { Translate } from '../locales/index.ts'
 import type { AgentDraft } from '../service/agents.types.ts'
 import type { Message } from './agents-section.tsx'
-import { Button, IconChevronLeftOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconChevronLeftOutlineRegular, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import { AgentModelsEditor } from './agent-models-editor.tsx'
 
 export interface AgentEditorFormProps {
@@ -133,6 +133,27 @@ export function AgentEditorForm(props: AgentEditorFormProps): ReactElement {
           {PERMISSIONS.map(option => <option key={option.value} value={option.value}>{t(option.key)}</option>)}
         </select>
       </Field>
+      <Field label={t('icon')} hint={t('iconHint')}>
+        <input
+          className="dta-input"
+          value={draft.icon}
+          placeholder="claude / 🦀 / https://…"
+          disabled={disabled}
+          onChange={event => onChange({ icon: event.target.value })}
+        />
+      </Field>
+      <div className="dta-field">
+        <span className="dta-field-label">{t('enabled')}</span>
+        <div className="dta-name">
+          <Switch
+            checked={draft.enabled}
+            label={t('enabled')}
+            disabled={disabled}
+            onChange={enabled => onChange({ enabled })}
+          />
+          <span className="dta-hint">{t(draft.enabled ? 'enabledOn' : 'enabledOff')}</span>
+        </div>
+      </div>
       <Field label={t('imageInput')} hint={t('imageInputHint')}>
         <select
           className="dta-input"
