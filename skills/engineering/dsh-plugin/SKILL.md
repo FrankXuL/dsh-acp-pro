@@ -145,8 +145,8 @@ metadata without submitting a prompt by default. Details in
   events that would pollute the model-visible history.
 - Use `--dsw-*` design tokens and this plugin's own i18n namespace (`dshAcpPro`,
   zh/en) for any client UI; the web shell does not offer utility CSS.
-- **License**: this repo integrates MIT code from `Fleey/deepseek-harness-acp` —
-  keep `LICENSE` and `NOTICE` attribution intact; do not strip them.
+- **License**: MIT (see `LICENSE`). Keep `NOTICE` accurate for third-party
+  components and trademarks as dependencies change.
 
 ## Known seams & ongoing work
 

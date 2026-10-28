@@ -33,10 +33,11 @@
 
 ## License & attribution
 
-This repo integrates MIT code from `Fleey/deepseek-harness-acp`. Keep `LICENSE`
-(verbatim upstream MIT text, Copyright (c) 2026 Fleey) and `NOTICE` (attribution,
-upstream repo/package/author, third-party deps) intact. Do not remove or edit the
-copyright/attribution. The plugin depends on DSH's plugin-record API which is for
+This repo is published under **MIT** (see `LICENSE`, Copyright (c) 2026 Oasis).
+Third-party components keep their own licenses and are listed in `NOTICE`, which
+must stay accurate as dependencies change.
+
+The plugin depends on DSH's plugin-record API which is for
 `packages/experimental/` and is **not** an official stability promise — flag DSH
 upgrades as a compatibility risk when they land.
 

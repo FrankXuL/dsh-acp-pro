@@ -1,23 +1,6 @@
 dsh-acp-pro
 ===========
 
-This project incorporates code derived from the deepseek-harness-acp project.
-In accordance with that project's MIT license, the following attribution is
-preserved:
-
-  Upstream repository:  https://github.com/Fleey/deepseek-harness-acp
-  Upstream package:     dsh-tauri-acp
-  Upstream author:      Fleey
-  Copyright:            Copyright (c) 2026 Fleey
-  License:              MIT
-
-The upstream MIT license and copyright notice are retained verbatim in
-[LICENSE](LICENSE). The upstream project is not affiliated with this repository,
-and no endorsement is implied.
-
-This repository's git history was started fresh when the derived source was
-integrated, so it does not carry the upstream commit history.
-
 Third-party components
 ----------------------
 
@@ -39,8 +22,9 @@ Provider marks
 
 The model picker's source rail bundles provider logo SVGs taken from the MonoCode
 project (https://github.com/hardbeat920/monocode, MIT License, Copyright (c) 2026 Nick),
-files `src/assets/providers/*.svg`, copied into `src/client/assets/provider-icons.ts`.
+inlined into `src/client/assets/provider-icons.ts`.
 
 These marks are trademarks of their respective owners and are used only to identify
 those products. dsh-acp-pro is not affiliated with, endorsed by, or sponsored by any
 of them.
+

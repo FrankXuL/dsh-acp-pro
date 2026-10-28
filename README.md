@@ -288,4 +288,4 @@ scripts/smoke.mts                   冒烟脚本
 
 ## 许可证
 
-本仓库以 **MIT** 发布，见 [LICENSE](LICENSE)。其中保留了本插件部分代码所基于的开源实现（[Fleey/deepseek-harness-acp](https://github.com/Fleey/deepseek-harness-acp)，Copyright (c) 2026 Fleey，MIT）的版权声明；详见 [NOTICE](NOTICE)。
+本仓库以 **MIT** 发布，见 [LICENSE](LICENSE)（Copyright (c) 2026 Oasis）。第三方组件（`@agentclientprotocol/sdk` 等）的许可与商标说明见 [NOTICE](NOTICE)。
