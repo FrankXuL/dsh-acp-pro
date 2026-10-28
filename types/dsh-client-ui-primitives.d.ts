@@ -43,6 +43,13 @@ declare module '@deepseek-ai/dsh-client-ui-primitives' {
     className?: string | undefined
   }): JSX.Element
 
+  /** Native DSH fish silhouette: path data plus its viewBox, exported for composing svgs. */
+  export const FISH_LOGO_PATH: string
+
+  export const FISH_LOGO_VIEWBOX: { width: number, height: number }
+
+  export function FishLogo(props: IconProps): JSX.Element
+
   export type TagTone = 'outline' | 'solid' | 'neutral' | 'quiet' | 'success' | 'info' | 'warning' | 'danger'
 
   export function Tag(props: { tone?: TagTone, className?: string | undefined, children?: ReactNode }): JSX.Element

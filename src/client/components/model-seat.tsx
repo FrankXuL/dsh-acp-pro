@@ -13,6 +13,8 @@ import type {
 import { favoriteKey, favoritesOf as configuredFavorites, toggleFavoriteOps } from '../service/favorites.ts'
 import type { AgentProfileView, SourceIcon } from '../service/model-seat-sources.ts'
 import { agentProfilesOf, resolveSourceIcon, sourceRoutes } from '../service/model-seat-sources.ts'
+import { MONOCHROME_PROVIDERS, providerIconUrl } from '../assets/provider-icons.ts'
+import { FISH_LOGO_PATH, FISH_LOGO_VIEWBOX } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 
 interface ModelSeatProps {
@@ -53,7 +55,7 @@ const NOOP_SUBSCRIBE = (): (() => void) => () => {}
 
 export const MODEL_SEAT_CSS = `
 .dsh-model-seat{display:inline-flex;position:relative}
-.dsh-model-seat-trigger{display:inline-flex;align-items:center;gap:4px;height:28px;background:none;border:none;border-radius:var(--dsw-radius-md,12px);color:var(--dsw-alias-label-primary,#eee);cursor:pointer;font:inherit;font-size:13px;padding:0 4px 0 8px;max-width:100%}
+.dsh-model-seat-trigger{display:inline-flex;align-items:center;gap:5px;height:28px;background:none;border:none;border-radius:var(--dsw-radius-md,12px);color:var(--dsw-alias-label-primary,#eee);cursor:pointer;font:inherit;font-size:13px;padding:0 4px 0 8px;max-width:100%}
 .dsh-model-seat-trigger:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08))}
 .dsh-model-seat-trigger:disabled{color:var(--dsw-alias-label-dimmed,#777);cursor:default}
 /* Card geometry mirrors the native model menu (ui-model-selection ModelSelect.module.css .menu). */
@@ -67,6 +69,9 @@ export const MODEL_SEAT_CSS = `
 .dsh-model-seat-rail-btn[data-active=true]{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08));color:var(--dsw-alias-label-primary,#fff)}
 .dsh-model-seat-rail-btn[data-fav=true][data-active=true]{color:var(--dsw-alias-state-warning-primary,#f5c542)}
 .dsh-model-seat-rail-glyph{font-size:12px;font-weight:600;line-height:1}
+.dsh-model-seat-trigger-icon{display:inline-flex;align-items:center;justify-content:center;flex:none;width:16px;height:16px;color:var(--dsw-alias-label-secondary,#bbb)}
+.dsh-model-seat-brand{display:block;width:16px;height:16px;background:currentColor;mask-position:center;mask-repeat:no-repeat;mask-size:contain;-webkit-mask-position:center;-webkit-mask-repeat:no-repeat;-webkit-mask-size:contain}
+.dsh-model-seat-brand-img{display:block;width:16px;height:16px;object-fit:contain}
 .dsh-model-seat-divider{width:16px;height:1px;flex:none;background:var(--dsw-alias-border-l2,#333);margin:2px 0}
 .dsh-model-seat-body{flex:1;min-width:180px;max-width:340px;min-height:0;display:flex;flex-direction:column}
 .dsh-model-seat-search{box-sizing:border-box;flex:none;width:100%;height:auto;margin:2px 0 3px;padding:5px 7px;border:0 solid transparent;border-radius:var(--dsw-radius-md,12px);background:transparent;color:inherit;font:inherit;font-size:12px;outline:none}
@@ -111,30 +116,44 @@ function effortName(model: ModelInfo | undefined, effortId: string | undefined):
 }
 
 /** Minimal inline glyph per source; brand-ish marks by name, then a letter fallback. */
-const BUILTIN_PATHS: Record<string, ReactElement> = {
-  claude: <path d="M12 4v16M5.2 8l13.6 8M18.8 8L5.2 16" />,
-  codex: <><path d="M12 3.6l6.9 4v8.8l-6.9 4-6.9-4V7.6z" /><path d="M12 8.2v7.6" /></>,
-  gemini: <path d="M12 3.5l2.1 6.4 6.4 2.1-6.4 2.1L12 20.5l-2.1-6.4L3.5 12l6.4-2.1z" />,
-  deepseek: <path d="M4 14c2.2-3.2 4.4-3.2 6.6 0s4.4 3.2 6.6 0 3.4-2.6 4.8-1.2" />,
-  openai: <><path d="M12 3.6l6.9 4v8.8l-6.9 4-6.9-4V7.6z" /><path d="M8.4 12h7.2" /></>,
-  opencode: <path d="M9 5l-5 7 5 7M15 5l5 7-5 7" />,
+const FAVORITES_ICON = <path d="M12 3.7l2.55 5.17 5.7.83-4.12 4.02.97 5.68L12 16.72l-5.1 2.68.97-5.68L3.75 9.7l5.7-.83z" />
+/** The platform source is DSH itself, so its mark is the native fish silhouette. */
+function PlatformIcon(): ReactElement {
+  return (
+    <svg
+      width={17}
+      height={17}
+      viewBox={`0 0 ${FISH_LOGO_VIEWBOX.width} ${FISH_LOGO_VIEWBOX.height}`}
+      fill="none"
+      aria-hidden="true"
+    >
+      <path d={FISH_LOGO_PATH} fill="currentColor" />
+    </svg>
+  )
 }
 
-const FAVORITES_ICON = <path d="M12 3.7l2.55 5.17 5.7.83-4.12 4.02.97 5.68L12 16.72l-5.1 2.68.97-5.68L3.75 9.7l5.7-.83z" />
-const PLATFORM_ICON = <path d="M12 3.5l7 8.5-7 8.5-7-8.5z" />
-
-/** One rail glyph: favorites star, platform mark, or the configured/AUTO-resolved source icon. */
+/** One rail glyph: favorites star, platform mark, or the configured/detected provider mark. */
 function SourceIcon({ tab, agents }: { tab: string, agents: Record<string, AgentProfileView> }): ReactElement {
   const common = { width: 17, height: 17, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
   if (tab === FAVORITES_TAB)
     return <svg {...common} fill="currentColor" stroke="none">{FAVORITES_ICON}</svg>
   if (tab === DSH_TAB)
-    return <svg {...common}>{PLATFORM_ICON}</svg>
+    return <PlatformIcon />
   const glyph: SourceIcon = resolveSourceIcon(agents[tab] ?? {}, tab)
-  if (glyph.kind === 'builtin')
-    return <svg {...common}>{BUILTIN_PATHS[glyph.name] ?? PLATFORM_ICON}</svg>
+  if (glyph.kind === 'builtin') {
+    const url = providerIconUrl(glyph.name)
+    if (url !== undefined) {
+      // Monochrome marks follow the label colour so they survive a light theme; the rest keep
+      // their own colours and are drawn as images.
+      return MONOCHROME_PROVIDERS.has(glyph.name)
+        ? <span className="dsh-model-seat-brand" style={{ maskImage: `url("${url}")`, WebkitMaskImage: `url("${url}")` }} />
+        : <img className="dsh-model-seat-brand-img" src={url} alt="" draggable={false} width={16} height={16} />
+    }
+  }
   if (glyph.kind === 'url')
     return <img className="dsh-model-seat-rail-img" src={glyph.url} alt="" width={16} height={16} />
+  if (glyph.kind === 'builtin')
+    return <span className="dsh-model-seat-rail-glyph">{glyph.name.slice(0, 1).toUpperCase()}</span>
   return <span className="dsh-model-seat-rail-glyph">{glyph.text}</span>
 }
 
@@ -310,10 +329,15 @@ export function ModelSeat(props: ModelSeatProps): ReactElement | null {
       return
     }
     void directory.select(selection).then((result) => {
-      if (result.ok)
+      // The host either accepts the selection, or refuses the effort for this exact model.
+      // Logging the outcome makes a refused effort visible instead of an apparently dead click.
+      if (result.ok) {
+        console.info(`[dsh-acp-pro] model selection accepted: ${selection.provider}/${selection.model} effort=${selection.reasoningEffort ?? '(default)'}`)
         setOpen(false)
-      else
-        setError(`${result.error.code}: ${result.error.message}`)
+        return
+      }
+      console.warn(`[dsh-acp-pro] model selection refused: ${result.error.code}: ${result.error.message} (${selection.provider}/${selection.model} effort=${selection.reasoningEffort ?? '(default)'})`)
+      setError(`${result.error.code}: ${result.error.message}`)
     })
   }, [directory])
 
@@ -344,6 +368,9 @@ export function ModelSeat(props: ModelSeatProps): ReactElement | null {
         }}
         title="选择模型与推理等级"
       >
+        <span className="dsh-model-seat-trigger-icon" aria-hidden="true">
+          <SourceIcon tab={current !== null && routes.includes(current.provider) ? current.provider : DSH_TAB} agents={agents} />
+        </span>
         {triggerText}{busy ? ' …' : ' ▾'}
       </button>
       {open && anchor !== null && (

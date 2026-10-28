@@ -1100,3 +1100,22 @@ describe('sync with a disabled route', () => {
     expect((adapter as any).agents.has(ROUTE)).toBe(false)
   })
 })
+
+describe('effort picked from the model menu', () => {
+  it('applies an effort chosen without changing the model on the next turn', async () => {
+    // The picker submits { provider, model, reasoningEffort } through selectModel, which lands as
+    // the next request's `reasoningEffort` while provider/model stay the same.
+    const adapter = create()
+    const history: any[] = [user('probe first')]
+    const first = await run(adapter, request(history, { model: 'mock-smart' }))
+    expect(first.text).toBe('effort:high|images:|probe first')
+
+    history.push(assistant(first.text), user('probe second'))
+    const second = await run(adapter, request(history, { model: 'mock-smart', reasoningEffort: 'low' as any }))
+    expect(second.text).toBe('effort:low|images:|probe second')
+
+    history.push(assistant(second.text), user('probe third'))
+    const third = await run(adapter, request(history, { model: 'mock-smart', reasoningEffort: 'high' as any }))
+    expect(third.text).toBe('effort:high|images:|probe third')
+  })
+})

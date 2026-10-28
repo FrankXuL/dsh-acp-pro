@@ -48,7 +48,7 @@ export function sourceRoutes(snapshot: Pick<ConfigFormSnapshot, 'value'> | undef
 }
 
 /** Built-in icon names the picker can draw itself. */
-export const BUILTIN_ICONS = ['claude', 'codex', 'gemini', 'deepseek', 'openai', 'opencode'] as const
+export const BUILTIN_ICONS = ['claude', 'codex', 'gemini', 'deepseek', 'openai', 'opencode', 'cursor', 'grok', 'pi', 'hermes', 'devin', 'antigravity'] as const
 
 export type BuiltinIcon = typeof BUILTIN_ICONS[number]
 
@@ -61,8 +61,36 @@ export type SourceIcon
 const URL_PATTERN = /^(https?:\/\/|\/\/|\.{0,2}\/)/i
 
 /**
- * Pick the glyph for one source. Order: a built-in name, then an emoji/URL literal, then the
- * display name's initial. Anything unrecognized degrades to the initial rather than failing.
+ * Names that carry a recognizable product behind them (only those with a bundled mark). Each entry is matched against the lower
+ * cased display name as a whole word so "OpenCode" hits `opencode` while a plain "Code" or
+ * "Antigravity" does not get a wrong glyph.
+ */
+const NAME_HINTS: readonly { name: BuiltinIcon, pattern: RegExp }[] = [
+  { name: 'claude', pattern: /claude/ },
+  { name: 'codex', pattern: /codex/ },
+  { name: 'gemini', pattern: /gemini/ },
+  { name: 'deepseek', pattern: /deep\.?seek/ },
+  { name: 'openai', pattern: /openai|open ai|\bgpt\b|chatgpt/ },
+  { name: 'opencode', pattern: /opencode|open code/ },
+  { name: 'antigravity', pattern: /antigravity|anti gravity/ },
+  { name: 'cursor', pattern: /\bcursor\b/ },
+  { name: 'grok', pattern: /\bgrok\b/ },
+  { name: 'pi', pattern: /^\s*pi\s*$/ },
+  { name: 'hermes', pattern: /hermes/ },
+  { name: 'devin', pattern: /devin/ },
+]
+
+function builtinFromName(displayName: string): BuiltinIcon | undefined {
+  const lower = displayName.toLowerCase()
+  return NAME_HINTS.find(hint => hint.pattern.test(lower))?.name
+}
+
+/**
+ * Pick the glyph for one source, in order of authority:
+ * 1. an explicit `icon` (built-in name, emoji, or image URL);
+ * 2. a built-in icon implied by the display name (Claude Code → claude, OpenCode → opencode);
+ * 3. the display name's initial.
+ * Anything unrecognized degrades to the initial rather than failing.
  */
 export function resolveSourceIcon(profile: AgentProfileView, route = ''): SourceIcon {
   const icon = profile.icon?.trim()
@@ -76,5 +104,8 @@ export function resolveSourceIcon(profile: AgentProfileView, route = ''): Source
       return { kind: 'emoji', text: icon }
   }
   const label = (profile.displayName ?? route).trim()
+  const hinted = label.length > 0 ? builtinFromName(label) : undefined
+  if (hinted !== undefined)
+    return { kind: 'builtin', name: hinted }
   return { kind: 'letter', text: label.length === 0 ? '?' : label[0]!.toUpperCase() }
 }

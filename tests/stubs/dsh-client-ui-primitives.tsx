@@ -14,6 +14,14 @@ export function Switch({ checked, onChange, label, disabled }: { checked: boolea
   return <button type="button" role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onChange(!checked)} />
 }
 
+/** Stand-in fish path; the real module exports the long official silhouette. */
+export const FISH_LOGO_PATH = 'M0 0h10v10H0z'
+export const FISH_LOGO_VIEWBOX = { width: 10, height: 10 }
+
+export function FishLogo({ size = 24 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 10 10" aria-hidden="true"><path d={FISH_LOGO_PATH} fill="currentColor" /></svg>
+}
+
 export function Tag({ children }: { children?: ReactNode }) {
   return <span>{children}</span>
 }
