@@ -26,6 +26,7 @@ import { AcpAgentProcess, applyConfigOptions } from './acp-agent.ts'
 import { MemoryAcpBindingStore } from './session-store.ts'
 import { SessionCoordinator } from './session-coordinator.ts'
 import { ChunkTranslator, usageDelta } from './chunk-translator.ts'
+import { createTurnSettlement, unknownTurnRefusal } from '../domain/turn.ts'
 import { ContextWindows, inferContextWindow } from './context-windows.ts'
 import { decidePermission, permissionOutcome } from './permission.ts'
 import { PromptCapabilitiesCache } from './prompt-capabilities.ts'
@@ -811,8 +812,9 @@ export class AcpAdapter extends LlmAdapter implements AcpSessionControl {
   }
 
   private assertKnown(binding: Binding): void {
-    if (binding.pending !== undefined || binding.turnState === 'unknown')
-      throw new LlmError(`${PLUGIN_ID}: the previous ACP turn has an unknown result; reset this session before continuing`, 'INVALID_REQUEST')
+    const refusal = unknownTurnRefusal(binding.turnState, binding.pending !== undefined)
+    if (refusal !== undefined)
+      throw new LlmError(`${PLUGIN_ID}: ${refusal}`, 'INVALID_REQUEST')
   }
 
   private attachSession(agent: AcpAgentProcess, binding: Binding): void {
@@ -1049,17 +1051,12 @@ export class AcpAdapter extends LlmAdapter implements AcpSessionControl {
     }
     // The turn's result is latched the moment it is known; draining may continue past it so
     // late output still reaches the transcript.
-    let outcome: Outcome | undefined
     let draining = false
+    // Settlement precedence lives in domain/turn.ts; this closure only adds the wake-up.
+    const settlement = createTurnSettlement()
+    const currentOutcome = (): Outcome | undefined => settlement.current() as Outcome | undefined
     const settle = (next: Outcome): void => {
-      // The first settled outcome wins, with one exception: once the user aborted, a late
-      // response or failure is an echo of that cancellation, never the turn's result. Agents
-      // routinely finish inside CANCEL_GRACE_MS, so without this precedence an abort would
-      // surface as an apparent success.
-      if (outcome === undefined)
-        outcome = next
-      else if (outcome.kind === 'aborted' && next.kind !== 'aborted')
-        return
+      settlement.settle(next)
       notify()
     }
     const settlePersistentResponse = async (response: PromptResponse): Promise<void> => {
@@ -1249,7 +1246,7 @@ export class AcpAdapter extends LlmAdapter implements AcpSessionControl {
         // Latch the abort now: the grace window only decides when to stop draining, and must
         // not leave the turn's result open for a racing response to claim. A timeout latched
         // before this point stays authoritative — it explains why the turn ended.
-        if (outcome?.kind !== 'timeout')
+        if (currentOutcome()?.kind !== 'timeout')
           settle({ kind: 'aborted' })
         cancelTimer = setTimeout(() => {
           draining = true
@@ -1309,14 +1306,15 @@ export class AcpAdapter extends LlmAdapter implements AcpSessionControl {
           yield queue.shift()!
         // A latched abort keeps draining until its grace window closes; every other outcome
         // ends the turn as soon as it settles.
-        if (outcome !== undefined && (outcome.kind !== 'aborted' || draining))
+        const settled = currentOutcome()
+        if (settled !== undefined && (settled.kind !== 'aborted' || draining))
           break
         await new Promise<void>((resolve) => {
           wake = resolve
         })
       }
       yield* translator.close()
-      yield* this.finish(outcome, translator, binding!, ephemeral, signal, usageBefore, active!.suppressUsage)
+      yield* this.finish(currentOutcome()!, translator, binding!, ephemeral, signal, usageBefore, active!.suppressUsage)
     }
     finally {
       clearTimeout(idleTimer)
@@ -1337,7 +1335,7 @@ export class AcpAdapter extends LlmAdapter implements AcpSessionControl {
           else if (binding.turnState === 'running')
             binding.turnState = 'idle'
         }
-        if (outcome === undefined && requestStarted) {
+        if (currentOutcome() === undefined && requestStarted) {
           active.controller.abort()
           agent.cancel(active.session)
         }
