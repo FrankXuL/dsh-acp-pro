@@ -47,44 +47,44 @@ const NOOP_SUBSCRIBE = (): (() => void) => () => {}
 
 export const PROTO_CSS = `
 .dsh-proto-seat{display:inline-flex;position:relative}
-.dsh-proto-trigger{display:inline-flex;align-items:center;gap:4px;height:28px;background:none;border:none;border-radius:6px;color:var(--dsw-alias-label-primary,#eee);cursor:pointer;font:inherit;font-size:13px;padding:0 8px;max-width:100%}
-.dsh-proto-trigger:hover{background:var(--dsw-alias-fill-tsp-secondary,#2a2a2a)}
-.dsh-proto-trigger:disabled{opacity:.5;cursor:default}
-.dsh-proto-panel{position:fixed;z-index:2147483000;display:flex;gap:6px;width:min(440px,92vw);max-width:min(560px,92vw);max-height:min(440px,70vh);padding:4px;border-radius:12px;background:var(--dsw-alias-bg-module-platform,#1f1f1f);border:1px solid var(--dsw-alias-border-l2,#333);box-shadow:0 12px 40px rgba(0,0,0,.45)}
-.dsh-proto-panel[data-pane=root],.dsh-proto-panel[data-pane=efforts]{width:min(280px,90vw)}
-.dsh-proto-rail{display:flex;flex-direction:column;align-items:center;gap:2px;width:40px;flex:none;padding:2px 0;overflow-y:auto}
-.dsh-proto-rail-btn{width:34px;height:34px;flex:none;display:flex;align-items:center;justify-content:center;background:none;border:none;border-radius:9px;color:var(--dsw-alias-label-tertiary,#999);cursor:pointer;font:inherit}
-.dsh-proto-rail-btn:hover{background:var(--dsw-alias-fill-tsp-secondary,#2a2a2a);color:var(--dsw-alias-label-primary,#eee)}
-.dsh-proto-rail-btn[data-active=true]{background:var(--dsw-alias-fill-tsp-secondary,#2a2a2a);color:var(--dsw-alias-label-primary,#fff)}
+.dsh-proto-trigger{display:inline-flex;align-items:center;gap:4px;height:28px;background:none;border:none;border-radius:var(--dsw-radius-md,12px);color:var(--dsw-alias-label-primary,#eee);cursor:pointer;font:inherit;font-size:13px;padding:0 4px 0 8px;max-width:100%}
+.dsh-proto-trigger:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08))}
+.dsh-proto-trigger:disabled{color:var(--dsw-alias-label-dimmed,#777);cursor:default}
+/* Card geometry mirrors the native model menu (ui-model-selection ModelSelect.module.css .menu). */
+.dsh-proto-panel{box-sizing:border-box;position:fixed;z-index:1100;display:flex;gap:2px;width:340px;height:360px;max-width:calc(100vw - 32px);max-height:min(360px,calc(100vh - 96px));overflow:hidden;padding:4px;border:0;border-radius:var(--dsw-radius-lg,16px);background:var(--dsw-menu-surface-fill,#232323);backdrop-filter:var(--dsw-menu-backdrop-filter,none);--dsw-elevation-stroke-color:var(--dsw-alias-border-l1,#3a3a3a);box-shadow:var(--dsw-elevation-prominent,0 12px 40px rgba(0,0,0,.45));color:var(--dsw-alias-label-primary,#eee);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2,#555);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2,#777)}
+.dsh-proto-panel[data-pane=root]{width:min(240px,calc(100vw - 32px));height:auto}
+.dsh-proto-panel[data-pane=efforts]{width:min(240px,calc(100vw - 32px));height:auto;max-height:min(360px,calc(100vh - 96px))}
+.dsh-proto-root{display:flex;flex-direction:column;gap:0;min-width:min(240px,calc(100vw - 32px));padding:2px 0}
+.dsh-proto-rail{display:flex;flex-direction:column;align-items:center;gap:2px;width:32px;flex:none;padding:2px 0;overflow-y:auto}
+.dsh-proto-rail-btn{width:28px;height:28px;flex:none;display:flex;align-items:center;justify-content:center;background:none;border:none;border-radius:var(--dsw-radius-md,12px);color:var(--dsw-alias-label-tertiary,#999);cursor:pointer;font:inherit}
+.dsh-proto-rail-btn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08));color:var(--dsw-alias-label-primary,#eee)}
+.dsh-proto-rail-btn[data-active=true]{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08));color:var(--dsw-alias-label-primary,#fff)}
 .dsh-proto-rail-btn[data-fav=true][data-active=true]{color:var(--dsw-alias-state-warning-primary,#f5c542)}
-.dsh-proto-rail-glyph{font-size:13px;font-weight:600;line-height:1}
-.dsh-proto-divider{width:20px;height:1px;flex:none;background:var(--dsw-alias-border-l2,#333);margin:3px 0}
-.dsh-proto-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
-.dsh-proto-back{flex:none;width:26px;height:26px;display:flex;align-items:center;justify-content:center;background:none;border:none;border-radius:6px;color:var(--dsw-alias-label-tertiary,#999);cursor:pointer;font-size:15px;line-height:1;padding:0}
-.dsh-proto-back:hover{background:var(--dsw-alias-fill-tsp-secondary,#2a2a2a);color:var(--dsw-alias-label-primary,#eee)}
-.dsh-proto-pane-head{display:flex;align-items:center;gap:4px;min-height:26px}
-.dsh-proto-search{box-sizing:border-box;width:100%;border:none;outline:none;border-radius:7px;background:var(--dsw-alias-fill-tsp-secondary,#2a2a2a);color:var(--dsw-alias-label-primary,#eee);font:inherit;font-size:12.5px;padding:6px 8px;margin:1px 0}
-.dsh-proto-search::placeholder{color:var(--dsw-alias-label-tertiary,#888)}
-.dsh-proto-list{display:flex;flex-direction:column;gap:1px;overflow-y:auto;min-height:0;padding-right:1px}
-.dsh-proto-group{font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#888);padding:6px 6px 1px}
-.dsh-proto-row{display:flex;align-items:center;gap:1px;min-height:34px}
-.dsh-proto-model{flex:1;min-width:0;display:flex;align-items:center;gap:6px;min-height:34px;background:none;border:none;border-radius:7px;color:var(--dsw-alias-label-primary,#eee);cursor:pointer;font:inherit;font-size:13px;line-height:20px;padding:0 8px;text-align:left}
-.dsh-proto-model:hover{background:var(--dsw-alias-fill-tsp-secondary,#2a2a2a)}
-.dsh-proto-model[data-selected=true]{background:var(--dsw-alias-fill-tsp-secondary,#2a2a2a)}
-.dsh-proto-model:disabled{opacity:.55;cursor:default}
-.dsh-proto-model-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dsh-proto-check{flex:none;color:var(--dsw-alias-label-secondary,#bbb);font-size:12px}
-.dsh-proto-star{flex:none;width:28px;height:34px;display:flex;align-items:center;justify-content:center;background:none;border:none;border-radius:7px;cursor:pointer;color:var(--dsw-alias-label-tertiary,#999);font-size:13px;opacity:.7}
-.dsh-proto-star:hover{background:var(--dsw-alias-fill-tsp-secondary,#2a2a2a);opacity:1}
-.dsh-proto-star[data-on=true]{color:var(--dsw-alias-state-warning-primary,#f5c542);opacity:1}
-.dsh-proto-root{display:flex;flex-direction:column;gap:1px;padding:2px}
-.dsh-proto-root-row{display:flex;align-items:center;gap:10px;min-height:34px;background:none;border:none;border-radius:7px;color:var(--dsw-alias-label-primary,#eee);cursor:pointer;font:inherit;font-size:13px;line-height:20px;padding:0 8px;text-align:left}
-.dsh-proto-root-row:hover{background:var(--dsw-alias-fill-tsp-secondary,#2a2a2a)}
-.dsh-proto-root-label{flex:none;color:var(--dsw-alias-label-secondary,#bbb)}
-.dsh-proto-root-value{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:var(--dsw-alias-label-tertiary,#999);font-size:12px}
-.dsh-proto-root-chevron{flex:none;color:var(--dsw-alias-label-tertiary,#888);font-size:14px}
-.dsh-proto-hint{font-size:12px;color:var(--dsw-alias-label-tertiary,#888);padding:8px}
-.dsh-proto-error{font-size:12px;color:var(--dsw-alias-state-error-primary,#f66);padding:6px 8px}
+.dsh-proto-rail-glyph{font-size:12px;font-weight:600;line-height:1}
+.dsh-proto-divider{width:16px;height:1px;flex:none;background:var(--dsw-alias-border-l2,#333);margin:2px 0}
+.dsh-proto-body{flex:1;min-width:180px;max-width:340px;min-height:0;display:flex;flex-direction:column}
+.dsh-proto-search{box-sizing:border-box;flex:none;width:100%;height:auto;margin:2px 0 3px;padding:5px 7px;border:0 solid transparent;border-radius:var(--dsw-radius-md,12px);background:transparent;color:inherit;font:inherit;font-size:12px;outline:none}
+.dsh-proto-search::placeholder{color:var(--dsw-alias-label-caption,#8a8a8a)}
+.dsh-proto-list{display:flex;flex-direction:column;min-height:0;flex:1 1 auto;overflow-y:auto}
+.dsh-proto-group{position:sticky;top:0;z-index:1;padding:4px 7px 2px;background:var(--dsw-alias-menu-group-header-fill,rgba(48,49,54,.94));color:var(--dsw-alias-label-tertiary,#8a8a8a);font-size:11px;line-height:16px;font-weight:500}
+.dsh-proto-row{display:flex;align-items:center;gap:2px;min-width:100%}
+.dsh-proto-model{box-sizing:border-box;flex:1;min-width:0;display:flex;align-items:center;gap:6px;min-height:34px;padding:5px 7px;border:none;border-radius:var(--dsw-radius-md,12px);background:transparent;color:inherit;cursor:pointer;font:inherit;text-align:left;outline:none}
+.dsh-proto-model:hover,.dsh-proto-model:focus-visible{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08))}
+.dsh-proto-model:disabled{color:var(--dsw-alias-label-dimmed,#777);cursor:default}
+.dsh-proto-model-name{flex:1;min-width:0;overflow:hidden;color:inherit;font-size:13px;line-height:18px;font-weight:400;text-overflow:ellipsis;white-space:nowrap}
+.dsh-proto-check{flex:0 0 14px;display:grid;place-items:center;color:var(--dsw-alias-label-primary,#eee);font-size:13px}
+.dsh-proto-star{flex:none;width:24px;height:24px;display:grid;place-items:center;padding:0;border:none;border-radius:50%;background:transparent;color:var(--dsw-alias-label-tertiary,#8a8a8a);cursor:pointer;font-size:13px;opacity:0}
+.dsh-proto-row:hover .dsh-proto-star,.dsh-proto-star[data-on=true],.dsh-proto-star:focus-visible{opacity:1}
+.dsh-proto-star:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08));color:var(--dsw-alias-label-primary,#eee)}
+.dsh-proto-star[data-on=true]{color:var(--dsw-alias-state-warning-primary,#f5c542)}
+/* Root cells mirror .cell: 34px high, 0 8px padding, 13/20 text. */
+.dsh-proto-cell{box-sizing:border-box;display:flex;align-items:center;gap:6px;width:auto;min-width:100%;height:34px;padding:0 8px;border:none;border-radius:var(--dsw-radius-md,12px);background:transparent;color:inherit;font:inherit;font-size:13px;line-height:20px;cursor:pointer;text-align:left;outline:none}
+.dsh-proto-cell:hover,.dsh-proto-cell:focus-visible{background:var(--dsw-alias-interactive-bg-hover,rgba(255,255,255,.08))}
+.dsh-proto-cell-label{flex:0 0 auto;white-space:nowrap}
+.dsh-proto-cell-value{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right;color:var(--dsw-alias-label-tertiary,#8a8a8a)}
+.dsh-proto-cell-chevron{flex:0 0 auto;width:12px;height:12px;color:var(--dsw-alias-menu-icon,#8a8a8a)}
+.dsh-proto-hint{padding:8px;color:var(--dsw-alias-label-tertiary,#8a8a8a);font-size:12px;line-height:18px}
+.dsh-proto-error{padding:6px 7px;border-radius:var(--dsw-radius-md,12px);background:var(--dsw-alias-interactive-bg-hover-danger,rgba(255,80,80,.14));color:var(--dsw-alias-state-error-primary,#f66);font-size:11px;line-height:16px}
 .dsh-proto-rail-slot{display:contents}
 `
 
@@ -197,7 +197,7 @@ export function ModelSeatProto(props: ProtoSeatProps): ReactElement | null {
   const [query, setQuery] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [favorites, setFavorites] = useState<string[]>(readFavorites)
-  const [anchor, setAnchor] = useState<{ left: number, bottom: number } | null>(null)
+  const [anchor, setAnchor] = useState<{ left: number, bottom: number, maxHeight: number } | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
 
@@ -257,7 +257,10 @@ export function ModelSeatProto(props: ProtoSeatProps): ReactElement | null {
     return [...byGroup.values()]
   }, [matches, sourceModels])
 
-  const showSearch = sourceModels.length > 4
+  // Native rule: search appears when the full catalog exceeds four models (not per source),
+  // so a small ACP tab inside a large catalog still gets a search entry.
+  const totalModels = useMemo(() => state.groups.reduce((count, group) => count + group.models.length, 0), [state.groups])
+  const showSearch = totalModels > 4
   const tabFailure = tab !== DSH_TAB && tab !== FAVORITES_TAB ? failureById.get(tab) : undefined
 
   const toggleFavorite = useCallback((provider: string, model: string) => {
@@ -277,6 +280,7 @@ export function ModelSeatProto(props: ProtoSeatProps): ReactElement | null {
     setAnchor({
       left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
       bottom: Math.max(8, window.innerHeight - rect.top + 8),
+      maxHeight: Math.max(160, Math.min(440, rect.top - 16)),
     })
   }, [pane])
 
@@ -303,6 +307,7 @@ export function ModelSeatProto(props: ProtoSeatProps): ReactElement | null {
       setAnchor({
         left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
         bottom: Math.max(8, window.innerHeight - rect.top + 8),
+        maxHeight: Math.max(160, Math.min(440, rect.top - 16)),
       })
     }
   }, [open, pane])
@@ -386,20 +391,20 @@ export function ModelSeatProto(props: ProtoSeatProps): ReactElement | null {
           aria-label="模型与推理"
           className="dsh-proto-panel"
           data-pane={pane}
-          style={{ left: anchor.left, bottom: anchor.bottom }}
+          style={{ left: anchor.left, bottom: anchor.bottom, maxHeight: anchor.maxHeight }}
         >
           {pane === 'root' && (
             <div className="dsh-proto-root">
-              <button type="button" className="dsh-proto-root-row" onClick={() => setPane('models')}>
-                <span className="dsh-proto-root-label">模型</span>
-                <span className="dsh-proto-root-value">{modelLabel}</span>
-                <span className="dsh-proto-root-chevron">›</span>
+              <button type="button" className="dsh-proto-cell" onClick={() => setPane('models')}>
+                <span className="dsh-proto-cell-label">模型</span>
+                <span className="dsh-proto-cell-value">{modelLabel}</span>
+                <span className="dsh-proto-cell-chevron">›</span>
               </button>
               {effortChoices.length > 0 && (
-                <button type="button" className="dsh-proto-root-row" onClick={() => setPane('efforts')}>
-                  <span className="dsh-proto-root-label">推理</span>
-                  <span className="dsh-proto-root-value">{effortLabel ?? '默认'}</span>
-                  <span className="dsh-proto-root-chevron">›</span>
+                <button type="button" className="dsh-proto-cell" onClick={() => setPane('efforts')}>
+                  <span className="dsh-proto-cell-label">推理</span>
+                  <span className="dsh-proto-cell-value">{effortLabel ?? '默认'}</span>
+                  <span className="dsh-proto-cell-chevron">›</span>
                 </button>
               )}
             </div>
@@ -431,9 +436,6 @@ export function ModelSeatProto(props: ProtoSeatProps): ReactElement | null {
           )}
           {pane !== 'root' && (
             <div className="dsh-proto-body">
-              <div className="dsh-proto-pane-head">
-                <button type="button" className="dsh-proto-back" aria-label="返回" onClick={() => setPane('root')}>‹</button>
-              </div>
               {pane === 'models' && showSearch && (
                 <input
                   className="dsh-proto-search"
@@ -463,8 +465,8 @@ export function ModelSeatProto(props: ProtoSeatProps): ReactElement | null {
                     {tabFailure !== undefined && <div className="dsh-proto-error">{tabFailure.name}：{tabFailure.message}</div>}
                     {visibleGroups.map(entry => (
                       <div key={entry.group.id}>
-                        {(tab === DSH_TAB || visibleGroups.length > 1) && <div className="dsh-proto-group">{entry.group.name}</div>}
-                        {entry.models.map(model => {
+                        {visibleGroups.length > 1 && <div className="dsh-proto-group">{entry.group.name}</div>}
+                              {entry.models.map(model => {
                           const selected = current !== null && current.provider === entry.group.id && current.model === model.id
                           const pending = state.pending !== null && state.pending.provider === entry.group.id && state.pending.model === model.id
                           const favorite = favoriteSet.has(favoriteKey(entry.group.id, model.id))

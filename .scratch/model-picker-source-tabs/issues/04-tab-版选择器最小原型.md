@@ -10,7 +10,7 @@
 Type: prototype
 
 Blocked by: 03, 02
-Status: claimed
+Status: resolved
 ## Question
 
 用最小原型验证「左侧来源 tab 的模型选择器」在真实 DSH 里的观感与操作，别在规格里空想。
@@ -68,5 +68,20 @@ v6 按三条反馈改：
 3. **trigger 外显 ACP**：当前选择属于本插件 ACP 路由时显示 `ACP 名 · 模型 · 推理`（如 `Claude Code · Claude Opus 5.5 · High`）；DSH 原生模型仍只显示 `模型 · 推理`。
 
 待用户刷新复验「点击先模型/推理」「行高」「ACP 外显」三点。
+
+### local — 2026-10-28T05:21:42.423Z
+根因（在活体 DSH web 里用页面内日志捕获）：
+
+1. 座位其实**注册成功**（`dsh-acp-pro: prototype model seat registered (priority -1)`）。
+2. 随后 slot entry 渲染崩溃：`slot entry crashed in 'conversation.input.model': cannot get property "remote.session" without inject` → 引擎把我们的 entry 退役并回落到原生。v2–v6 一直“看不到”的真正原因是 inject 作用域缺 `remote` / `remote.session`（调用 modelDirectories/sessions 的链路需要它）。
+3. 诊断 chip 也没显示，因为 list slot 要求 `options.id`；已补 `id: 'dsh-acp-proto-diag'`。
+
+v6.1 修复：nested inject 改为 `['slots','modelDirectories','configForms','sessions','remote','remote.session']`；面板加 `box-sizing:border-box` 并按 trigger 上方空间设置 `maxHeight`（不再顶出视口）；背景改用 `--dsw-menu-surface-fill`（不透明菜单面）；chip 在注册成功后隐藏。
+
+已在活体 DSH web（bridge，同一 profile）验证通过：trigger 被我们的组件替换（`DeepSeek-V4.1-Flash · High ▾`），点击先出「模型 / 推理」两行，模型 pane 有 icon rail + 搜索 + 收藏星，面板 440×324 完整落在视口内。截图：`docs/design/prototype-v6-verify.png`。待用户在自己 GUI 刷新/重启复验样式与侧边栏。
+
+## Answer
+
+原型在真实 DSH 0.2.1-rc.3 跑通并经用户验收：图标 rail（★收藏 / 平台 / 每个 ACP）+ 模型/推理两级 + 固定卡片尺寸 + 原生材质与分组；影子注册的三个真实失败原因与修复已记录；结论回填 Answer 与地图。
 
 ## 进度
