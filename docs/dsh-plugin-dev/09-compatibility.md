@@ -45,3 +45,22 @@ Client catalog 自身有 generation 缓存：`ui-model-selection/src/client/cata
 本批另实现 select 配置、模式、动态命令、持久绑定、能力驱动的 load、新会话边界、未知结果阻断，以及工具文件位置和 diff 跳转。权限请求必须关联当前进程与活动回合；恢复通知不重复生成卡片或计费。默认 smoke 仅检查握手与会话信息，不发送 prompt；未收到命令通知与空列表分别表示为 `null` 和 `[]`。
 
 本地门禁与审查结果统一记录在[实施进度](../../.omc/plans/dsh-acp-evolution.md)；[实机交接](../dsh-verification-handoff.md)列出待验证的运行组合、原生选择器、面板、恢复和权限场景。本地检查不能替代官方 app 或 DSH Tauri 的实机验收。非 select 配置、v2、registry 安装及未实现的 fs/terminal 能力不在本批功能范围。
+
+## 模型选择器影子替换（0.2 核心）
+
+composer 的 `conversation.input.model` 座位由本插件以更低 `priority` 接管，自绘来源分组选择器（图标 rail + 收藏）。这不是文档化的插件扩展点，而是 slot 引擎的既有行为：
+
+| 事实 | 证据 |
+| --- | --- |
+| 座位 spec 由 `ui-conversation` 声明，原生选择器只是注册者之一 | `packages/client/ui-conversation/src/client/apply.ts:458` |
+| 同一 cell 内按 `priority` 升序渲染，最低者优先；同 priority 重复注册抛错 | `packages/client/ui-slots/src/index.ts:1138-1144`、`:1220-1223` |
+| `slots.inject` 对未声明的座位静默等待，不算装载失败 | `packages/client/ui-renderer/src/client/registry.ts:194-271` |
+| 渲染抛错会让该 entry 一次性退役并回落到下一个注册者 | `packages/client/ui-renderer/src/client/scoped-slots.tsx:1127-1134` |
+
+**风险与已知陷阱**
+
+- 没有版本协商 API：上游改动排序规则或座位声明方式时，影子可能静默失效（表现为「生成的菜单又变回原生」）。
+- 依赖列表必须写全：entry 的 inject 作用域缺少 `remote` / `remote.session` 时，entry 在渲染期抛 `cannot get property "remote.session" without inject`，引擎退役该 entry 并回落原生——**没有任何用户可见报错**。排查第一步是看 console 里的 `slot entry crashed in 'conversation.input.model'`。
+- 影子期间第三方 `conversation.input.model.label` 徽标失效（子插槽不能重复声明）。
+
+**复核触发条件**：DSH 升级到新的 minor（0.2 → 0.3）或 `ui-model-selection` / `ui-slots` / `ui-renderer` 任一包有变更时，必须重跑规格里的真机验收清单（见 [`.scratch/model-picker-ui/spec.md`](../../.scratch/model-picker-ui/spec.md) §9），并把结论追加到本节。

@@ -209,3 +209,31 @@ ACP 外部 Agent 的工具调用不是 dsh 发起的：
 - **记录名**：`plugin:acp/*` 用简写 owner（dsh 内部约定 owner 取包名后缀）。记录名只是字符串，不影响读取；但升级时应确认记录名语法没有收紧。
 - **记录形状**：读取端（Definition/渲染器）目前直接消费当前声明类型。记录是 `ignorable` 的，旧版本 dsh 读到会原样保留；如果未来改字段，需要自己按 `phase`/字段做版本兼容，不能让旧记录把渲染器打崩。
 - **截图与实测**：`docs/e2e-cards.png` 是工具卡的实测截图（Codex ACP 路由）；计划卡与权限卡的结构以本文件与源码为准。
+
+## 模型选择器影子替换
+
+composer 的模型菜单不是 dsh 原生那一个：插件以 `priority: -1` 接管 `conversation.input.model` 座位，自绘「图标来源 rail + 两级菜单」的选择器。
+
+```mermaid
+flowchart LR
+  subgraph Host["DSH Host"]
+    A["llm.listProviders / listModels"] --> B["session.modelCatalog()"]
+  end
+  subgraph Client["插件选择器（影子座位）"]
+    C["settings 文档<br/>agents[*].enabled / icon"] --> D["来源 rail 分类与图标"]
+    E["modelDirectories.directoryFor(sessionId)<br/>（与 /model 同一个实例）"] --> F["当前模型 · 分组 · failures · pending"]
+    D --> G["渲染模型列表"]
+    F --> G
+    G -- "点模型 / 推理" --> H["directory.select()<br/>→ session/selectModel"]
+    I["settings 文档 favorites"] --> J["★ 收藏 tab"]
+    J --> G
+    K["点 ☆"] --> L["ConfigForm.mutate(['favorites'])"]
+  end
+  B --> E
+```
+
+- **来源分类与顺序**：`configForms` 快照里的 `agents` 决定哪些路由算「ACP」以及 rail 顺序（`enabled: false` 不出现），`ModelDirectory.store.groups` 决定 rail 上真实有哪些组。
+- **数据面**：整份状态复用 `modelDirectories` 的每会话实例，与 `/model` 弹窗共享 `current / pending / failures`；不新建 catalog。
+- **提交**：只有一个动作 `directory.select(selection)`，Host 侧落到 `session/selectModel`。
+- **收藏**：与设置页同一条 `ConfigForm.mutate()` 通路写 `favorites`，不新增 RPC。
+- **降级**：座位未声明 → 静默；注册抛错 → try/catch 保留原生；渲染崩溃 → error boundary（引擎的 abdicate 也只会回落原生，不连带 `/model`）。

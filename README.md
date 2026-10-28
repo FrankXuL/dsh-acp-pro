@@ -32,6 +32,7 @@ dsh 的模型提供方通常是一个 HTTP 接口。本插件把「一个外部 
 ### 模型提供方
 
 - **按路由接入**：每个 ACP Agent 一条 provider 路由；模型选择器按 `displayName` 显示。
+- **来源分组的选择器**：composer 的模型菜单由本插件接管，左侧是一列图标 rail——`★ 收藏`、`平台`（dsh 自己的 provider），之后每条已启用的 ACP 一个图标。点开先选「模型 / 推理」，模型行右侧的 ☆ 可收藏常用模型。`/model` 命令弹窗仍是 dsh 原生的那一版（不分组）。
 - **模型发现**：模型列表来自 Agent 的 `configOptions`（`category: "model"`），兼容旧版 `models` + `session/set_model`；`default` 表示用 Agent 自己的默认模型。也可以在配置里手写 `models` 覆盖。
 - **推理等级**：在独立会话中确认目标模型的 `thought_level` 选项和默认值，按进程代次、工作目录和模型缓存；原生选择器的选择经 `session/set_config_option` 下发，不通过切换活动会话来探测元数据。
 - **图片输入**：按 ACP 握手应答里的 `promptCapabilities.image` 判断 Agent 能收什么；未握手过时会先做一次「只握手、不开会话」的探测，答案按路由缓存。`imageInput` 可覆盖误报。图片按 dsh 的请求尺寸重新编码后作为 ACP `image` 块发送。
@@ -180,6 +181,8 @@ npm install && npm run build
 | `args` | `[]` | 命令参数。 |
 | `env` | `{}` | 追加给子进程的环境变量（在继承的环境之上）。 |
 | `displayName` | 路由名 | 模型选择器里显示的名字。 |
+| `enabled` | `true` | `false` 时该路由**不再注册**为模型提供方：从模型选择器、`/model` 和官方「模型」页消失，设置页仍保留这一行以便重新启用。正在跑的回合会先跑完，之后回收子进程并失效该会话绑定。 |
+| `icon` | 无（用显示名首字母） | 模型选择器左侧的来源图标。内置名 `claude` / `codex` / `gemini` / `deepseek` / `openai` / `opencode` 用内置矢量图标；其他值按 emoji 或图片 URL 渲染；认不出的值回退首字母。 |
 | `cwd` | 会话 workspace | 子进程目录，以及取不到会话 workspace 时的 ACP 会话目录。 |
 | `authMethod` | 无 | 握手后调用 `authenticate` 的方法 id；报错信息会列出 Agent 支持的方法。 |
 | `models` | `[]` | 手动声明模型（`id`、`name`、`description`、`contextWindow`）；声明后不再自动发现。 |
@@ -195,6 +198,20 @@ npm install && npm run build
 
 **取消与超时的结果优先级**：用户中止后，该回合的结果立刻锁定为 `aborted`；Agent 在取消宽限期（5 秒）内返回的正常响应只用于继续排空尾部输出，不会把 `aborted` 覆盖成 `stop`。空闲超时若先于中止触发，则以 `TIMEOUT` 为准——它才是回合结束的真实原因。两种情况都会把「回合结果未知」的标记清掉，不会遗留需要 reset 的状态。
 
+### 模型收藏
+
+`favorites` 是 `agents` 同级的一个列表，记录模型选择器里收藏的模型：
+
+```yaml
+    favorites:
+      - provider: cc
+        model: claude-opus-5-5
+```
+
+- 只存 `provider` + `model` 身份，**不存可用性**；指向已删除或已停用路由的收藏会保留，只是暂时不显示，重新启用后自动回来。
+- 收藏随 profile 配置走（跨设备、重启不丢），不依赖浏览器本地存储——dsh web 每次启动端口会变，localStorage 会因此失效。
+- 选择器里点 ☆ 只收藏不切模型、不关菜单；收藏 tab 按来源分组。
+
 插件学到的元数据存放在 `$DSH_HOME/cache/dsh-acp-pro/`：`prompt-capabilities.json`（Agent 声明能收的内容类型，按路由 + 启动命令指纹缓存）和 `context-windows.json`（Agent 通过 `usage_update` 上报过的窗口大小）。
 
 ## 限制
@@ -208,6 +225,9 @@ npm install && npm run build
 - **图片能力有窗口期**：dsh 挂附件服务且 Agent 声明支持图片时才会发图；能力未知时插件保持沉默（dsh 会按「未知」原样下发），`imageInput` 可覆盖 Agent 的漏报。
 - **元数据是「学到的」**：推理等级取自 Agent 最近一次会话的 `thought_level`；上下文窗口在 ACP 里一轮之前不可知，首次运行前仍按配置值算。
 - **不重试**：`retryPolicy` 固定为 0 次，避免 Agent 重复执行有副作用的操作。
+- **`/model` 弹窗不分组**：`/model` 走 dsh 自己的命令弹窗，仍是原生那一版（按 provider 分组、没有来源 rail）。两个入口共用同一份会话选择，但外观不同——这是插件侧影子替换的固有边界，不做同步。
+- **第三方模型名徽标在影子选择器里不生效**：原生选择器支持 `conversation.input.model.label` 内联扩展（插件给模型名加徽标），本插件整座替换了座位且不能重复声明该子插槽，因此这类徽标在**本插件的选择器里**不显示；`/model` 里照旧。
+- **只支持 dsh 0.2 核心**：影子替换依赖 0.2 的 slot 引擎（`priority` 渲染顺序）与 `modelDirectories` 服务。0.1 核心的客户端半边本来就不加载，会自然退回原生选择器。
 - **官方「模型」页不能编辑 ACP 路由**：插件按 DOM 替换把那一行提示改成指向「ACP Agents」页（官方编辑器没有插件插槽）；由 YAML 声明的路由在设置页里带 `YAML` 标记，可覆盖字段但不能改名/删除。
 - **记录依赖 dsh 的插件记录 API**：本插件用 `@deepseek-ai/dsh-session` 的 `appendPluginRecord` 写 `plugin:acp/*` 记录。dsh 文档把这个 API 限定给 `packages/experimental/` 内的包，对外部插件**不是稳定的官方承诺**——升级 dsh 时需要复核兼容性。写入被拒时会静默禁用记录（对话不受影响）；没有可用 Session 的轮次（辅助调用）不产生记录。
 - **记录形状兼容性**：记录是 `ignorable` 的仅日志事件，旧版本 dsh 会跳过并保留；但记录读取端目前直接消费当前声明的形状，未来改字段需要自己做版本兼容。

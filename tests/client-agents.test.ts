@@ -7,6 +7,7 @@ import {
   emptyDraft,
   mergeDiscovered,
   parseEnv,
+  removeOpsOf,
   saveOpsOf,
   snapshotOf,
   validateDraft,
@@ -195,5 +196,14 @@ describe('enabled and icon fields', () => {
     const rows = rowsOf(section({ agents: { legacy: { command: '/bin/legacy', args: ['--acp'] } } }))
     expect(rows[0]!.profile.enabled).toBe(true)
     expect(draftOf(rows[0]!).enabled).toBe(true)
+  })
+})
+
+describe('saveOpsOf with favorites', () => {
+  it('keeps favorites untouched when an agent is saved or removed', () => {
+    const ops = saveOpsOf(null, 'codex', { command: '/bin/codex-acp' })
+    expect(ops.some(op => op.path[0] === 'favorites')).toBe(false)
+    const removal = removeOpsOf('codex')
+    expect(removal).toEqual([{ op: 'unset', path: ['agents', 'codex'] }])
   })
 })
