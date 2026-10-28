@@ -19,6 +19,10 @@ export interface AcpModelProfile {
 
 export interface AcpAgentProfile {
   displayName?: string
+  /** Optional picker icon: a built-in name (`claude`, `codex`, …), an emoji or a URL. */
+  icon?: string
+  /** Whether this route registers as a provider at all; defaults to `true`. */
+  enabled?: boolean
   command: string
   args: string[]
   env: Record<string, string>
@@ -38,4 +42,10 @@ export interface AcpAgentProfile {
   contextWindow: number
   startupTimeoutMs: number
   idleTimeoutMs: number
+}
+
+/** One favorited model in the picker; identity only, never availability. */
+export interface AcpModelFavorite {
+  provider: string
+  model: string
 }
