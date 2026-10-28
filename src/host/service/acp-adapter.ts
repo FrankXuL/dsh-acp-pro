@@ -29,6 +29,7 @@ import { bindingFromRecord, bindingRecordOf } from '../domain/binding.ts'
 import { SessionCoordinator } from './session-coordinator.ts'
 import { ChunkTranslator, usageDelta } from './chunk-translator.ts'
 import { createTurnSettlement, unknownTurnRefusal } from '../domain/turn.ts'
+import { classifySourceChange, decideFromApproval, crossingKey, warningFor } from '../domain/source-change.ts'
 import { ContextWindows, inferContextWindow } from './context-windows.ts'
 import { decidePermission, permissionOutcome } from './permission.ts'
 import { PromptCapabilitiesCache } from '../domain/prompt-capabilities.ts'
@@ -235,6 +236,8 @@ export class AcpAdapter extends LlmAdapter implements AcpSessionControl {
   /** Routes disabled by configuration whose live process must outlive the running turn. */
   private readonly retiring = new Set<string>()
   private readonly bindings = new Map<string, Binding>()
+  /** Source that has been executing each conversation, and crossings the user already confirmed. */
+  private readonly conversationSources = new Map<string, { owner: string, confirmed: Set<string> }>()
   private readonly turns = new Map<AcpAgentProcess, Map<string, ActiveTurn>>()
   private readonly bindingStore: AcpBindingStore
   private readonly coordinator = new SessionCoordinator()
@@ -767,6 +770,61 @@ export class AcpAdapter extends LlmAdapter implements AcpSessionControl {
     }
   }
 
+  /**
+   * Decide whether this turn changes the source that owns a conversation, and ask if it does.
+   *
+   * Runs once per non-ephemeral turn, before any session is created: the answer decides whether
+   * the turn proceeds at all. Refusing throws, so nothing is rebuilt and the stored selection is
+   * simply never used for this conversation.
+   *
+   * @param route - the ACP route this turn would use.
+   * @param dshSessionId - the conversation.
+   * @param options - the generation options, for the approval signal.
+   */
+  private async confirmSourceChange(route: string, dshSessionId: string, options: GenerateOptions): Promise<void> {
+    const state = this.conversationSources.get(dshSessionId) ?? { owner: '', confirmed: new Set<string>() }
+    const known = state.owner === ''
+    const verdict = classifySourceChange(known ? undefined : state.owner, route, { confirmed: state.confirmed })
+    if (verdict.kind === 'first-turn') {
+      this.conversationSources.set(dshSessionId, { owner: route, confirmed: state.confirmed })
+      return
+    }
+    if (verdict.kind !== 'needs-confirmation')
+      return
+    const warning = warningFor(verdict)!
+    const approve = this.host.approve
+    if (approve === undefined) {
+      // No approval surface: proceed and let the turn's own output carry the change, rather than
+      // making the feature unfireable on hosts that cannot ask.
+      this.rememberCrossing(dshSessionId, warning.from, warning.to, state.confirmed)
+      this.host.logger.warn(`${PLUGIN_ID}: conversation "${dshSessionId}" switched ${warning.from} -> ${warning.to} without an approval surface`)
+      return
+    }
+    const session = this.host.agentOf(dshSessionId)
+    if (session === undefined) {
+      this.rememberCrossing(dshSessionId, warning.from, warning.to, state.confirmed)
+      return
+    }
+    const outcome = await approve({
+      agent: session,
+      toolName: `switch source ${warning.from} -> ${warning.to}`,
+      reason: `This conversation is executed by ${warning.from}. Switching to ${warning.to} discards its in-process session, hands the history over as flattened text, and keeps ${warning.from}'s tool execution out of ${warning.to}'s context.`,
+      ...options.signal === undefined ? {} : { signal: options.signal },
+    })
+    const decision = decideFromApproval(outcome)
+    if (!decision.proceed)
+      throw new LlmError(`${PLUGIN_ID}: switching this conversation from ${warning.from} to ${warning.to} was declined`, 'INVALID_REQUEST')
+    this.rememberCrossing(dshSessionId, warning.from, warning.to, state.confirmed)
+    if (decision.notifyOnly)
+      this.host.logger.warn(`${PLUGIN_ID}: conversation "${dshSessionId}" switched ${warning.from} -> ${warning.to} without an explicit answer`)
+  }
+
+  /** Record one confirmed crossing and make the new source the conversation's owner. */
+  private rememberCrossing(dshSessionId: string, from: string, to: string, confirmed: Set<string>): void {
+    confirmed.add(crossingKey(from, to))
+    this.conversationSources.set(dshSessionId, { owner: to, confirmed })
+  }
+
   private assertKnown(binding: Binding): void {
     const refusal = unknownTurnRefusal(binding.turnState, binding.pending !== undefined)
     if (refusal !== undefined)
@@ -988,6 +1046,17 @@ export class AcpAdapter extends LlmAdapter implements AcpSessionControl {
     // enough; the lock key is namespaced so it never contends with a user's real session.
     const key = this.bindingKey(route, dshSessionId ?? '')
     const release = await this.coordinator.acquire(ephemeral ? ephemeralKeyOf(route) : key)
+    try {
+      // A conversation runs on one source at a time. Crossing that boundary rebuilds the ACP
+      // session, flattens the history, and hides the prior source's tool execution — worth one
+      // explicit answer per conversation and pair, and worth nothing at all within a source.
+      if (!ephemeral)
+        await this.confirmSourceChange(route, dshSessionId!, options)
+    }
+    catch (error) {
+      release()
+      throw error
+    }
     const system = profile.systemPrompt === 'forward' ? systemText(options) : undefined
     const requestedEffort = options.reasoningEffort as string | undefined
     let binding: Binding | undefined
@@ -1426,6 +1495,12 @@ export class AcpAdapter extends LlmAdapter implements AcpSessionControl {
   }
 
   private invalidateBindings(route: string): void {
+    // The ACP session is being rebuilt for this route, so the conversation's recorded owner no
+    // longer describes what is running: forget it, and the next turn re-establishes it.
+    for (const [dshSessionId, state] of this.conversationSources) {
+      if (state.owner === route)
+        this.conversationSources.delete(dshSessionId)
+    }
     for (const binding of this.bindings.values()) {
       if (binding.provider !== route)
         continue
