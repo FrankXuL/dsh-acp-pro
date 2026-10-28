@@ -1,6 +1,6 @@
 <!-- DSH-FORMAT: md-v1 -->
 <!-- DSH-TITLE: ACP 对齐原生：清理、跨来源切换告知、轨迹与用量对标 -->
-<!-- DSH-STATUS: ready-for-agent -->
+<!-- DSH-STATUS: closed -->
 <!-- DSH-LABELS: wayfinder:map -->
 <!-- DSH-IDEMPOTENCY-KEY: deck-ed44a603-5977296 -->
 <!-- DSH-CREATED: 2026-10-28T12:01:52.964Z -->
