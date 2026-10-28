@@ -243,6 +243,8 @@ function sessionCommands(commands: readonly AvailableCommand[]): AcpSessionComma
 
 export class AcpAdapter extends LlmAdapter implements AcpSessionControl {
   private readonly agents = new Map<string, { process: AcpAgentProcess, facts: string }>()
+  /** Routes disabled by configuration whose live process must outlive the running turn. */
+  private readonly retiring = new Set<string>()
   private readonly bindings = new Map<string, Binding>()
   private readonly turns = new Map<AcpAgentProcess, Map<string, ActiveTurn>>()
   private readonly bindingStore: AcpBindingStore
@@ -424,12 +426,70 @@ export class AcpAdapter extends LlmAdapter implements AcpSessionControl {
     })
   }
 
+  /**
+   * Stop a route without cutting off work already in flight: `/model`, the catalog and new turns
+   * lose the route immediately (the caller has already dropped it from its registration), but a
+   * running turn is allowed to finish before its process is disposed and its bindings invalidated.
+   * @param route - the provider route being disabled.
+   */
+  retireRoute(route: string): void {
+    const entry = this.agents.get(route)
+    if (entry === undefined) {
+      this.retiring.delete(route)
+      return
+    }
+    if (this.hasActiveTurn(entry.process)) {
+      this.retiring.add(route)
+      return
+    }
+    this.retiring.delete(route)
+    entry.process.dispose()
+    this.agents.delete(route)
+    this.invalidateBindings(route)
+  }
+
+  /** Undo a parked retirement (the route was re-enabled before its turn finished). */
+  cancelRetirement(route: string): void {
+    this.retiring.delete(route)
+  }
+
+  /** Whether any conversation currently has a turn running against this route. */
+  hasActiveTurn(process: AcpAgentProcess): boolean {
+    return (this.turns.get(process)?.size ?? 0) > 0
+  }
+
+  /** Run a parked retirement once the route's last turn has settled. */
+  private settleRetirements(): void {
+    for (const route of [...this.retiring]) {
+      const entry = this.agents.get(route)
+      if (entry === undefined) {
+        this.retiring.delete(route)
+        continue
+      }
+      if (this.hasActiveTurn(entry.process))
+        continue
+      this.retiring.delete(route)
+      entry.process.dispose()
+      this.agents.delete(route)
+      this.invalidateBindings(route)
+    }
+  }
+
   sync(): void {
     const profiles = this.profiles()
     for (const [route, entry] of this.agents) {
       const profile = profiles.get(route)
-      if (profile !== undefined && spawnFacts(profile) === entry.facts)
+      if (profile !== undefined && spawnFacts(profile) === entry.facts) {
+        this.retiring.delete(route)
         continue
+      }
+      // A route dropped from configuration while a turn still runs is retired, not aborted:
+      // its process has to survive until that turn settles (see `retireRoute`).
+      if (profile === undefined && this.hasActiveTurn(entry.process)) {
+        this.retiring.add(route)
+        continue
+      }
+      this.retiring.delete(route)
       this.abortTurns(entry.process)
       entry.process.dispose()
       this.agents.delete(route)
@@ -445,6 +505,7 @@ export class AcpAdapter extends LlmAdapter implements AcpSessionControl {
     for (const entry of this.agents.values())
       entry.process.dispose()
     this.agents.clear()
+    this.retiring.clear()
     this.turns.clear()
     for (const binding of this.bindings.values()) {
       binding.unlisten?.()
@@ -1388,8 +1449,10 @@ export class AcpAdapter extends LlmAdapter implements AcpSessionControl {
     if (sessions?.get(turn.session.sessionId) !== turn)
       return
     sessions.delete(turn.session.sessionId)
-    if (sessions.size === 0)
+    if (sessions.size === 0) {
       this.turns.delete(agent)
+      this.settleRetirements()
+    }
   }
 
   private abortTurns(agent?: AcpAgentProcess): void {

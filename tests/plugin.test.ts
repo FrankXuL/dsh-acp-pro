@@ -122,3 +122,41 @@ describe('plugin wiring', () => {
     await fiber.dispose()
   })
 })
+
+describe('disabled routes', () => {
+  it('drops a disabled route from providers and the settings directory but keeps it in the form', async () => {
+    const ctx = new Context()
+    ctx.plugin(LlmRuntime)
+    const fiber = ctx.plugin(plugin, {
+      agents: {
+        on: { displayName: 'Enabled', command: process.execPath, args: [MOCK] },
+        off: { displayName: 'Disabled', command: process.execPath, args: [MOCK], enabled: false },
+      },
+    } as any)
+    await new Promise(resolve => setTimeout(resolve, 50))
+
+    expect(ctx.llm.listProviders().map(provider => provider.id)).toEqual(['on'])
+    expect(ctx.llm.listConfigurableProviders().map(entry => entry.provider)).toEqual(['on'])
+    await fiber.dispose()
+  })
+
+  it('does not re-register when only favorites change', async () => {
+    const ctx = new Context()
+    ctx.plugin(LlmRuntime)
+    const fiber = ctx.plugin(plugin, {
+      agents: { on: { displayName: 'Enabled', command: process.execPath, args: [MOCK] } },
+      favorites: [{ provider: 'on', model: 'mock-fast' }],
+    } as any)
+    await new Promise(resolve => setTimeout(resolve, 50))
+    const before = ctx.llm.listProviders()
+
+    const next = plugin.Config({
+      agents: { on: { displayName: 'Enabled', command: process.execPath, args: [MOCK] } },
+      favorites: [{ provider: 'on', model: 'mock-smart' }],
+    } as any)
+    updateVolatile((fiber as any).config.favorites!, next.favorites!)
+    ctx.emit('loader/volatile-update', [['favorites']])
+    expect(ctx.llm.listProviders()).toEqual(before)
+    await fiber.dispose()
+  })
+})

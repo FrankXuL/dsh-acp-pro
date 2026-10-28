@@ -1002,3 +1002,101 @@ describe('acp adapter', () => {
   })
 })
 
+
+describe('retireRoute', () => {
+  it('disposes an idle route immediately and drops its bindings', async () => {
+    const adapter = create(profile())
+    await adapter.listModels(ROUTE)
+    expect((adapter as any).agents.has(ROUTE)).toBe(true)
+    adapter.retireRoute(ROUTE)
+    expect((adapter as any).agents.has(ROUTE)).toBe(false)
+  })
+
+  it('keeps a running turn alive and recycles the process only after it finishes', async () => {
+    let approvalStarted!: () => void
+    const started = new Promise<void>((resolve) => { approvalStarted = resolve })
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    const h = host()
+    h.approve = async () => {
+      approvalStarted()
+      // Keep the turn in flight while retireRoute is called below.
+      await gate
+      return 'allowed-once' as const
+    }
+    const adapter = create(profile({ permission: 'ask' }), h)
+    const pending = run(adapter, request([user('please edit')]))
+    await started
+
+    adapter.retireRoute(ROUTE)
+    // The turn is still running, so the process must survive the retire request.
+    expect((adapter as any).agents.has(ROUTE)).toBe(true)
+
+    release()
+    await pending
+    // Once the turn settles, the parked retirement runs.
+    expect((adapter as any).agents.has(ROUTE)).toBe(false)
+    expect((adapter as any).retiring.has(ROUTE)).toBe(false)
+  })
+
+  it('cancels a parked retirement when the route is enabled again', async () => {
+    let approvalStarted!: () => void
+    const started = new Promise<void>((resolve) => { approvalStarted = resolve })
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    const h = host()
+    h.approve = async () => {
+      approvalStarted()
+      await gate
+      return 'allowed-once' as const
+    }
+    const adapter = create(profile({ permission: 'ask' }), h)
+    const pending = run(adapter, request([user('please edit')]))
+    await started
+
+    adapter.retireRoute(ROUTE)
+    adapter.cancelRetirement(ROUTE)
+    release()
+    await pending
+    expect((adapter as any).agents.has(ROUTE)).toBe(true)
+  })
+
+  it('recycles immediately when it retires a route with no active turn but a live process', async () => {
+    const adapter = create(profile())
+    await adapter.listModels(ROUTE)
+    adapter.retireRoute(ROUTE)
+    expect((adapter as any).agents.has(ROUTE)).toBe(false)
+    adapter.retireRoute(ROUTE)
+    expect((adapter as any).agents.has(ROUTE)).toBe(false)
+  })
+})
+
+describe('sync with a disabled route', () => {
+  it('parks a disabled route that still has a running turn instead of aborting it', async () => {
+    let approvalStarted!: () => void
+    const started = new Promise<void>((resolve) => { approvalStarted = resolve })
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    const h = host()
+    h.approve = async () => {
+      approvalStarted()
+      await gate
+      return 'allowed-once' as const
+    }
+    let enabled = true
+    const adapter = new AcpAdapter(h, () => new Map(enabled ? [[ROUTE, profile({ permission: 'ask' })]] : []), new ContextWindows())
+    adapters.push(adapter)
+    const pending = run(adapter, request([user('please edit')]))
+    await started
+
+    enabled = false
+    adapter.sync()
+    // Still alive: the turn has not settled yet.
+    expect((adapter as any).agents.has(ROUTE)).toBe(true)
+    expect((adapter as any).retiring.has(ROUTE)).toBe(true)
+
+    release()
+    await pending
+    expect((adapter as any).agents.has(ROUTE)).toBe(false)
+  })
+})

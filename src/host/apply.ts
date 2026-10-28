@@ -100,18 +100,27 @@ function settingsNsOf(ctx: Context): string {
   return typeof entryId === 'string' ? entryId : PLUGIN_ID
 }
 
+/** Routes the host should register: everything the user did not disable. */
+function enabledRoutes(profiles: ReadonlyMap<string, AcpAgentProfile>): string[] {
+  return [...profiles.entries()].filter(([, profile]) => profile.enabled !== false).map(([route]) => route)
+}
+
 function directoryEntries(profiles: ReadonlyMap<string, AcpAgentProfile>, settingsNs: string): LlmConfigurableProvider[] {
-  return [...profiles.entries()].map(([provider, profile]) => ({
+  return enabledRoutes(profiles).map(provider => {
+    const profile = profiles.get(provider)!
+    return ({
     provider,
     displayName: profile.displayName ?? provider,
     settingsNs,
-    settingsPath: ['agents', provider],
-    declared: true,
-  }))
+      settingsPath: ['agents', provider],
+      declared: true,
+    })
+  })
 }
 
+/** Registration-relevant facts: enabled routes and their display names. Favorites never appear. */
 function routeFacts(profiles: ReadonlyMap<string, AcpAgentProfile>, settingsNs: string): string {
-  return JSON.stringify([settingsNs, [...profiles.entries()].map(([route, profile]) => [route, profile.displayName ?? null]).sort()])
+  return JSON.stringify([settingsNs, enabledRoutes(profiles).map(route => [route, profiles.get(route)?.displayName ?? null]).sort()])
 }
 
 export function apply(ctx: Context, config: Config): void {
@@ -197,11 +206,20 @@ export function apply(ctx: Context, config: Config): void {
   const reconcile = (): void => {
     adapter.sync()
     const snapshot = profiles()
+    // Disabled routes leave the registry and the directory, but a turn already running keeps its
+    // process until it settles (see AcpAdapter.retireRoute). Re-enabled routes cancel that parking.
+    const enabled = new Set(enabledRoutes(snapshot))
+    for (const route of snapshot.keys()) {
+      if (enabled.has(route))
+        adapter.cancelRetirement(route)
+      else
+        adapter.retireRoute(route)
+    }
     const settingsNs = settingsNsOf(ctx)
     const facts = routeFacts(snapshot, settingsNs)
     if (facts === registeredFacts)
       return
-    const routes = [...snapshot.keys()]
+    const routes = enabledRoutes(snapshot)
     if (registration === undefined) {
       if (routes.length > 0)
         registration = ctx.llm.registerAdapter(routes, adapter)
