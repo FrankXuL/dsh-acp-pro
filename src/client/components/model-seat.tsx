@@ -3,13 +3,16 @@
  * ACP) over the shared `ModelDirectory`. The root mirrors the native two-step menu (model /
  * reasoning) and the trigger shows the owning ACP when the selection belongs to one.
  *
- * NOTE: favorites still live in localStorage here; wiring them to the plugin config is spec
- * ticket #05.
+ * Favorites and the enabled/icon fields come from the plugin's settings document, so they survive
+ * restarts and follow the profile rather than one browser origin.
  */
 import type { ReactElement } from 'react'
 import type {
-  ConfigForm, ConfigFormSnapshot, JsonValue, ModelDirectoryFacade, ModelDirectoryState, ModelInfo, ModelProviderGroup, ModelSelection,
+  AcpModelFavorite, ConfigForm, ConfigFormSnapshot, ModelDirectoryFacade, ModelDirectoryState, ModelInfo, ModelProviderGroup, ModelSelection,
 } from '../types/runtime.ts'
+import { favoriteKey, favoritesOf as configuredFavorites, toggleFavoriteOps } from '../service/favorites.ts'
+import type { AgentProfileView, SourceIcon } from '../service/model-seat-sources.ts'
+import { agentProfilesOf, resolveSourceIcon, sourceRoutes } from '../service/model-seat-sources.ts'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 
 interface ModelSeatProps {
@@ -91,39 +94,6 @@ export const MODEL_SEAT_CSS = `
 .dsh-model-seat-rail-slot{display:contents}
 `
 
-interface AgentProfileView { displayName?: string }
-
-function agentsOf(value: JsonValue | undefined): Record<string, AgentProfileView> {
-  const agents = (value as { agents?: unknown } | undefined)?.agents
-  return typeof agents === 'object' && agents !== null && !Array.isArray(agents)
-    ? agents as Record<string, AgentProfileView>
-    : {}
-}
-
-function favoriteKey(provider: string, model: string): string {
-  return `${provider}\u0000${model}`
-}
-
-function readFavorites(): string[] {
-  try {
-    const raw = window.localStorage.getItem(FAVORITES_KEY)
-    const parsed: unknown = raw === null ? [] : JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []
-  }
-  catch {
-    return []
-  }
-}
-
-function writeFavorites(keys: readonly string[]): void {
-  try {
-    window.localStorage.setItem(FAVORITES_KEY, JSON.stringify(keys))
-  }
-  catch {
-    // Local storage can be unavailable (private mode); favorites are best-effort here.
-  }
-}
-
 function groupOf(groups: readonly ModelProviderGroup[], id: string): ModelProviderGroup | undefined {
   return groups.find(group => group.id === id)
 }
@@ -141,38 +111,31 @@ function effortName(model: ModelInfo | undefined, effortId: string | undefined):
 }
 
 /** Minimal inline glyph per source; brand-ish marks by name, then a letter fallback. */
+const BUILTIN_PATHS: Record<string, ReactElement> = {
+  claude: <path d="M12 4v16M5.2 8l13.6 8M18.8 8L5.2 16" />,
+  codex: <><path d="M12 3.6l6.9 4v8.8l-6.9 4-6.9-4V7.6z" /><path d="M12 8.2v7.6" /></>,
+  gemini: <path d="M12 3.5l2.1 6.4 6.4 2.1-6.4 2.1L12 20.5l-2.1-6.4L3.5 12l6.4-2.1z" />,
+  deepseek: <path d="M4 14c2.2-3.2 4.4-3.2 6.6 0s4.4 3.2 6.6 0 3.4-2.6 4.8-1.2" />,
+  openai: <><path d="M12 3.6l6.9 4v8.8l-6.9 4-6.9-4V7.6z" /><path d="M8.4 12h7.2" /></>,
+  opencode: <path d="M9 5l-5 7 5 7M15 5l5 7-5 7" />,
+}
+
+const FAVORITES_ICON = <path d="M12 3.7l2.55 5.17 5.7.83-4.12 4.02.97 5.68L12 16.72l-5.1 2.68.97-5.68L3.75 9.7l5.7-.83z" />
+const PLATFORM_ICON = <path d="M12 3.5l7 8.5-7 8.5-7-8.5z" />
+
+/** One rail glyph: favorites star, platform mark, or the configured/AUTO-resolved source icon. */
 function SourceIcon({ tab, agents }: { tab: string, agents: Record<string, AgentProfileView> }): ReactElement {
   const common = { width: 17, height: 17, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
-  if (tab === FAVORITES_TAB) {
-    return (
-      <svg {...common} fill="currentColor" stroke="none">
-        <path d="M12 3.7l2.55 5.17 5.7.83-4.12 4.02.97 5.68L12 16.72l-5.1 2.68.97-5.68L3.75 9.7l5.7-.83z" />
-      </svg>
-    )
-  }
-  if (tab === DSH_TAB) {
-    return (
-      <svg {...common}>
-        <path d="M12 3.5l7 8.5-7 8.5-7-8.5z" />
-      </svg>
-    )
-  }
-  const name = (agents[tab]?.displayName ?? tab).toLowerCase()
-  if (name.includes('claude'))
-    return <svg {...common}><path d="M12 4v16M5.2 8l13.6 8M18.8 8L5.2 16" /></svg>
-  if (name.includes('codex') || name.includes('gpt') || name.includes('openai')) {
-    return <svg {...common}><path d="M12 3.6l6.9 4v8.8l-6.9 4-6.9-4V7.6z" /><path d="M12 8.2v7.6" /></svg>
-  }
-  if (name.includes('gemini'))
-    return <svg {...common}><path d="M12 3.5l2.1 6.4 6.4 2.1-6.4 2.1L12 20.5l-2.1-6.4L3.5 12l6.4-2.1z" /></svg>
-  if (name.includes('deepseek'))
-    return <svg {...common}><path d="M4 14c2.2-3.2 4.4-3.2 6.6 0s4.4 3.2 6.6 0 3.4-2.6 4.8-1.2" /></svg>
-  if (name.includes('auto'))
-    return <svg {...common}><path d="M13 3.5L5.5 13h5l-1.5 7.5L18 10.5h-5z" /></svg>
-  if (name.includes('open') || name.includes('code'))
-    return <svg {...common}><path d="M9 5l-5 7 5 7M15 5l5 7-5 7" /></svg>
-  const initial = (agents[tab]?.displayName ?? tab).trim()
-  return <span className="dsh-model-seat-rail-glyph">{initial.length === 0 ? '?' : initial[0]!.toUpperCase()}</span>
+  if (tab === FAVORITES_TAB)
+    return <svg {...common} fill="currentColor" stroke="none">{FAVORITES_ICON}</svg>
+  if (tab === DSH_TAB)
+    return <svg {...common}>{PLATFORM_ICON}</svg>
+  const glyph: SourceIcon = resolveSourceIcon(agents[tab] ?? {}, tab)
+  if (glyph.kind === 'builtin')
+    return <svg {...common}>{BUILTIN_PATHS[glyph.name] ?? PLATFORM_ICON}</svg>
+  if (glyph.kind === 'url')
+    return <img className="dsh-model-seat-rail-img" src={glyph.url} alt="" width={16} height={16} />
+  return <span className="dsh-model-seat-rail-glyph">{glyph.text}</span>
 }
 
 function tabName(tab: string, agents: Record<string, AgentProfileView>): string {
@@ -199,20 +162,13 @@ export function ModelSeat(props: ModelSeatProps): ReactElement | null {
   const [tab, setTab] = useState<string>(DSH_TAB)
   const [query, setQuery] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [favorites, setFavorites] = useState<string[]>(readFavorites)
+  const favorites = useMemo(() => configuredFavorites(configSnapshot), [configSnapshot])
   const [anchor, setAnchor] = useState<{ left: number, bottom: number, maxHeight: number } | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
 
-  const agents = useMemo(() => agentsOf(configSnapshot.value), [configSnapshot.value])
-  const routes = useMemo(
-    () => Object.keys(agents).sort((left, right) => {
-      const a = agents[left]?.displayName ?? left
-      const b = agents[right]?.displayName ?? right
-      return a.localeCompare(b) || left.localeCompare(right)
-    }),
-    [agents],
-  )
+  const agents = useMemo(() => agentProfilesOf(configSnapshot), [configSnapshot])
+  const routes = useMemo(() => sourceRoutes(configSnapshot), [configSnapshot])
   const groupById = useMemo(() => new Map(state.groups.map(group => [group.id, group])), [state.groups])
   const failureById = useMemo(() => new Map(state.failures.map(failure => [failure.id, failure])), [state.failures])
   const tabIds = useMemo(
@@ -229,7 +185,10 @@ export function ModelSeat(props: ModelSeatProps): ReactElement | null {
   const currentEffort = current === null ? undefined : current.reasoningEffort
   const effortChoices = currentModel?.reasoning?.efforts ?? []
   const busy = state.pending !== null || state.status === 'selecting'
-  const favoriteSet = useMemo(() => new Set(favorites), [favorites])
+  const favoriteSet = useMemo(
+    () => new Set(favorites.map(item => favoriteKey(item.provider, item.model))),
+    [favorites],
+  )
   const isAcpCurrent = current !== null && routes.includes(current.provider)
 
   const matches = useCallback((model: ModelInfo): boolean => {
@@ -267,13 +226,13 @@ export function ModelSeat(props: ModelSeatProps): ReactElement | null {
   const tabFailure = tab !== DSH_TAB && tab !== FAVORITES_TAB ? failureById.get(tab) : undefined
 
   const toggleFavorite = useCallback((provider: string, model: string) => {
-    const key = favoriteKey(provider, model)
-    setFavorites((previous) => {
-      const next = previous.includes(key) ? previous.filter(item => item !== key) : [key, ...previous]
-      writeFavorites(next)
-      return next
-    })
-  }, [])
+    if (form === undefined)
+      return
+    // One whole-array `set`: rapid clicks can never interleave into a half-written list, and the
+    // settings document (not this component) stays the source of truth.
+    const ops = toggleFavoriteOps(configuredFavorites(form.getSnapshot()), provider, model)
+    void form.mutate(ops)
+  }, [form])
 
   const reposition = useCallback(() => {
     const rect = triggerRef.current?.getBoundingClientRect()

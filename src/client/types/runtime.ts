@@ -8,6 +8,8 @@ import type { ComponentType, ReactElement } from 'react'
 import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { AcpSessionControlClient, AcpSessionControlContribution } from '../../shared/session-control-remote.ts'
 
+export type { AcpModelFavorite } from '../../shared/types.ts'
+
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }
 
 export type SettingsPathOpView
