@@ -140,6 +140,12 @@ export const zh = {
   'session.newContext': '开始新上下文',
   'session.resetFailed': '无法重置 ACP 会话，请重试。',
   'permission.displayOnly': '仅记录展示，请在原生审批框里答复。',
+  // Usage in an ACP conversation is derived, not declared: the protocol reports session totals,
+  // so a turn's figure is the difference between two observations. Saying so is the honest
+  // alternative to presenting it as a billed amount.
+  'usage.estimated': '按上报增量估算',
+  'usage.estimatedDetail': 'ACP 只提供会话级累计用量，本回合数字为相邻上报快照的差值估算，不是账单级精确值。',
+  'usage.contextWindowEstimated': '上下文窗口来自 Agent 上报或配置推测，可能是估算值。',
 }
 
 export const en: Record<keyof typeof zh, string> = {
@@ -279,6 +285,9 @@ export const en: Record<keyof typeof zh, string> = {
   'session.newContext': 'Start a new context',
   'session.resetFailed': 'Could not reset the ACP session. Try again.',
   'permission.displayOnly': 'Display only; answer in the native approval dialog.',
+  'usage.estimated': 'estimated from reported deltas',
+  'usage.estimatedDetail': 'ACP reports session totals only, so this turn is the difference between two observations — an estimate, not a billed amount.',
+  'usage.contextWindowEstimated': 'The context window comes from the agent or from configuration inference and may itself be an estimate.',
 }
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
