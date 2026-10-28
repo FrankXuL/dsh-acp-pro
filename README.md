@@ -8,7 +8,6 @@ English: a DeepSeek Harness plugin that registers external ACP agents as model p
 
 - [这是什么](#这是什么)
 - [功能](#功能)
-- [截图](#截图)
 - [架构](#架构)
 - [安装](#安装)
 - [构建](#构建)
@@ -63,18 +62,6 @@ dsh 的模型提供方通常是一个 HTTP 接口。本插件把「一个外部 
 - **当前会话面板**：在支持 Typert 控制接口的宿主中，显示 Agent 确认的配置、模式、命令和恢复状态；支持普通/分组 select，运行中提交的配置按会话顺序等待应用。模型和思考强度保持原生控件为唯一编辑入口，命令按钮只插入输入框，不自动发送。当前不宣告 boolean 配置能力。
 
 绑定数据优先存放在实际 profile 的 `data/dsh-acp-pro`，无 profile 路径服务时使用 `$DSH_HOME/data/dsh-acp-pro`（默认 `~/.dsh`）。只保存必要身份、游标和状态，不复制凭据或完整聊天正文。尚未完成的真实 DSH/Agent 验收、可选接口条件和执行步骤见[验收交接](docs/dsh-verification-handoff.md)及[兼容性证据](docs/dsh-plugin-dev/09-compatibility.md)。
-
-## 截图
-
-`docs/e2e-cards.png`：DSH Web 端一个 Codex（ACP）会话。工具卡以紧凑行展示工具 kind、标题、输入摘要、耗时与状态（失败/完成）；上方是 dsh 自己的过程分组「已完成分析」，卡片下方是同一轮的思考块，右上角模型选择器显示 ACP 路由 Codex。
-
-![工具卡截图](docs/e2e-cards.png)
-
-`docs/e2e-permission.png`：Claude Code（ACP）一轮「写入 → 读回」的执行。工具卡显示 write/read 的耗时与状态，权限卡显示 ACP 的权限请求、可用选项和最终结果（已允许 / 已拒绝）。批准动作仍由 dsh 原生审批框完成，卡片只做记录。
-
-![权限卡截图](docs/e2e-permission.png)
-
-计划卡的结构见 [`docs/architecture.md`](docs/architecture.md)。
 
 ## 架构
 
@@ -273,7 +260,7 @@ src/
     lib/line-diff.ts                逐行 diff
     styles/records.ts               卡片样式（只用宿主 --dsw-* token）
 tests/                              vitest（tests/fixtures/mock-agent.mjs 是 mock ACP Agent）
-docs/                               截图与架构文档
+docs/                               架构与设计文档
 scripts/smoke.mts                   冒烟脚本
 ```
 

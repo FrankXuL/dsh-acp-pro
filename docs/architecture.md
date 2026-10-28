@@ -208,7 +208,7 @@ ACP 外部 Agent 的工具调用不是 dsh 发起的：
 - **DSH 版本**：`appendPluginRecord` 与 `PluginRecordMap` 属于 dsh 的插件记录机制，dsh 文档把它面向 `packages/experimental/` 的包，外部插件可用但不是稳定承诺。升级 dsh 时要一起复核：函数是否仍在、记录名语法、`ignorable` 语义、Conversation Definition 的注册 API、`conversation.chat.node` 槽位与 `PropsRuntime` 形状。
 - **记录名**：`plugin:acp/*` 用简写 owner（dsh 内部约定 owner 取包名后缀）。记录名只是字符串，不影响读取；但升级时应确认记录名语法没有收紧。
 - **记录形状**：读取端（Definition/渲染器）目前直接消费当前声明类型。记录是 `ignorable` 的，旧版本 dsh 读到会原样保留；如果未来改字段，需要自己按 `phase`/字段做版本兼容，不能让旧记录把渲染器打崩。
-- **截图与实测**：`docs/e2e-cards.png` 是工具卡的实测截图（Codex ACP 路由）；计划卡与权限卡的结构以本文件与源码为准。
+- **实测证据**：工具卡、计划卡与权限卡的结构与行为以本文件与源码为准；真机验收结论见 [`dsh-verification-results.md`](dsh-verification-results.md)，仓库不再保存界面截图。
 
 ## 模型选择器影子替换
 
