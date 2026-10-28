@@ -8,6 +8,7 @@
 import { Readable, Writable } from 'node:stream'
 import process from 'node:process'
 import * as acp from '@agentclientprotocol/sdk'
+import { appendFileSync } from 'node:fs'
 
 const MODELS = [
   { value: 'default', name: 'Agent Default' },
@@ -26,7 +27,15 @@ const EFFORTS = [
   { value: 'high', name: '' },
 ]
 
+const sessions = new Map()
 let counter = 0
+
+function configOptions(session) {
+  return [
+    { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: session.model, options: MODELS },
+    { id: 'effort', name: 'Thinking', category: 'thought_level', type: 'select', currentValue: session.effort, options: EFFORTS },
+  ]
+}
 
 acp.agent({ name: 'mock-catalog-agent' })
   .onRequest('initialize', () => ({
@@ -37,13 +46,26 @@ acp.agent({ name: 'mock-catalog-agent' })
   }))
   .onRequest('session/new', () => {
     const sessionId = `s${++counter}`
+    try { appendFileSync(process.env.PROBE_LOG ?? '/tmp/catalog-reuse.log', `NEW ${sessionId}\n`) } catch {}
+    const session = { model: 'default', effort: 'low' }
+    sessions.set(sessionId, session)
     process.stderr.write(`new-session ${sessionId}\n`)
-    return {
-      sessionId,
-      configOptions: [
-        { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: 'default', options: MODELS },
-        { id: 'effort', name: 'Thinking', category: 'thought_level', type: 'select', currentValue: 'low', options: EFFORTS },
-      ],
-    }
+    return { sessionId, configOptions: configOptions(session) }
+  })
+  .onRequest('session/close', ({ params }) => {
+    try { appendFileSync(process.env.PROBE_LOG ?? '/tmp/catalog-reuse.log', `CLOSE ${params.sessionId}\n`) } catch {}
+    return {}
+  })
+  .onRequest('session/set_config_option', ({ params }) => {
+    const session = sessions.get(params.sessionId)
+    if (session === undefined)
+      throw new Error(`unknown session ${params.sessionId}`)
+    if (params.configId === 'model' && MODELS.some(model => model.value === params.value))
+      session.model = params.value
+    else if (params.configId === 'effort' && EFFORTS.some(effort => effort.value === params.value))
+      session.effort = params.value
+    else
+      throw new Error(`unknown config option ${params.configId}=${params.value}`)
+    return { configOptions: configOptions(session) }
   })
   .connect(acp.ndJsonStream(Writable.toWeb(process.stdout), Readable.toWeb(process.stdin)))
