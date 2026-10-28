@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { describe, expect, it, vi } from 'vitest'
 import { ContextWindows } from '../src/host/service/context-windows.ts'
-import { PromptCapabilitiesCache } from '../src/host/service/prompt-capabilities.ts'
+import { PromptCapabilitiesCache } from '../src/host/domain/prompt-capabilities.ts'
 import { MemoryAcpBindingStore } from '../src/host/domain/binding-store.ts'
 
 const ROUTE = 'counting'
@@ -35,7 +35,7 @@ describe('ephemeral MCP forwarding', () => {
     const installed = Array.from({ length: 3 }, (_, index) => ({
       name: `mcp-${index}`, command: process.execPath, args: ['-e', ''], env: [],
     }))
-    vi.doMock('../src/host/service/mcp-servers.ts', () => ({ installedMcpServers: () => installed }))
+    vi.doMock('../src/host/domain/mcp-servers.ts', () => ({ installedMcpServers: () => installed }))
     const { AcpAdapter } = await import('../src/host/service/acp-adapter.ts')
 
     const adapter = new AcpAdapter({ ...host, bindingStore: new MemoryAcpBindingStore() },
@@ -69,7 +69,7 @@ describe('ephemeral MCP forwarding', () => {
     const installed = Array.from({ length: 3 }, (_, index) => ({
       name: `mcp-${index}`, command: process.execPath, args: ['-e', ''], env: [],
     }))
-    vi.doMock('../src/host/service/mcp-servers.ts', () => ({ installedMcpServers: () => installed }))
+    vi.doMock('../src/host/domain/mcp-servers.ts', () => ({ installedMcpServers: () => installed }))
     const { AcpAdapter } = await import('../src/host/service/acp-adapter.ts')
     const adapter = new AcpAdapter({ ...host, bindingStore: new MemoryAcpBindingStore() },
       () => new Map([[ROUTE, profile()]]),

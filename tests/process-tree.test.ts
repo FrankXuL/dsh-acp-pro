@@ -7,7 +7,7 @@ import type { AcpAgentProfile } from '../src/shared/types.ts'
 import { join } from 'node:path'
 import process from 'node:process'
 import { describe, expect, it } from 'vitest'
-import { AcpAgentProcess } from '../src/host/service/acp-agent.ts'
+import { AcpAgentProcess } from '../src/host/transport/acp-agent.ts'
 
 const MOCK = join(import.meta.dirname, 'fixtures', 'mock-spawning-agent.mjs')
 const silentLogger = { info: () => {}, warn: () => {}, error: () => {} }

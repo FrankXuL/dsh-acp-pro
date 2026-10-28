@@ -101,7 +101,7 @@ describe('layering', () => {
    *  its slice lands. Anything else over the ceiling is a regression, not a known debt. */
   const SCHEDULED_SPLITS = [
     'src/host/service/acp-adapter.ts',
-    'src/host/service/acp-agent.ts',
+    'src/host/transport/acp-agent.ts',
     'src/client/components/model-seat.tsx',
   ]
 
@@ -124,7 +124,7 @@ describe('layering', () => {
     // removes it entirely should also remove its entry above.
     const BASELINE = new Map([
       ['src/host/service/acp-adapter.ts', 1488],
-      ['src/host/service/acp-agent.ts', 880],
+      ['src/host/transport/acp-agent.ts', 846],
       ['src/client/components/model-seat.tsx', 577],
     ])
     const regressed: string[] = []

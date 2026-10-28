@@ -12,7 +12,7 @@ import process from 'node:process'
 import { describe, expect, it } from 'vitest'
 import { AcpAdapter } from '../src/host/service/acp-adapter.ts'
 import { ContextWindows } from '../src/host/service/context-windows.ts'
-import { PromptCapabilitiesCache } from '../src/host/service/prompt-capabilities.ts'
+import { PromptCapabilitiesCache } from '../src/host/domain/prompt-capabilities.ts'
 import { MemoryAcpBindingStore } from '../src/host/domain/binding-store.ts'
 
 const ROUTE = 'counting'

@@ -9,7 +9,7 @@ import { readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { describe, expect, it } from 'vitest'
-import { AcpAgentProcess } from '../src/host/service/acp-agent.ts'
+import { AcpAgentProcess } from '../src/host/transport/acp-agent.ts'
 
 const LOG = '/tmp/effort-agent.log'
 const MOCK = join(import.meta.dirname, 'fixtures', 'mock-effort-agent.mjs')

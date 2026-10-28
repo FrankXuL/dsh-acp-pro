@@ -16,17 +16,16 @@ import type {
 import type { ChildProcess } from 'node:child_process'
 import type { AcpAgentProfile } from '../../shared/types.ts'
 import type { HostLogger } from '../types/index.ts'
-import type { AcpPromptCapabilities } from './prompt-capabilities.ts'
-import { spawn } from 'node:child_process'
-import { homedir } from 'node:os'
+import type { AcpPromptCapabilities } from '../domain/prompt-capabilities.ts'
+import { startProcess, type OwnedProcess } from './acp-process.ts'
 import process from 'node:process'
 import { Readable, Writable } from 'node:stream'
 import { client as createClientApp, methods, ndJsonStream, PROTOCOL_VERSION } from '@agentclientprotocol/sdk'
 import { LlmError } from '@deepseek-ai/dsh-llm'
 import { PLUGIN_ID } from '../../shared/constants.ts'
 import { DEFAULT_MODEL_ID } from '../config/constants.ts'
-import { installedMcpServers } from './mcp-servers.ts'
-import { promptCapabilitiesOf } from './prompt-capabilities.ts'
+import { installedMcpServers } from '../domain/mcp-servers.ts'
+import { promptCapabilitiesOf } from '../domain/prompt-capabilities.ts'
 
 export interface AcpAdvertisedModel {
   id: string
@@ -176,7 +175,11 @@ export class AcpAgentProcess {
   private starting: Promise<LiveAgent> | undefined
   private generationCounter = 0
   private disposed = false
-  private stderrTail = ''
+  private owned: OwnedProcess | undefined
+  /** Observed stderr, delegated to the owned process; kept as a field so diagnostics read it here. */
+  private get stderrTail(): string {
+    return this.owned?.stderrTail() ?? ''
+  }
   private readonly listeners = new Map<string, (update: SessionUpdate) => void>()
   private readonly pendingInitialSessions = new Set<string>()
   private readonly initialSessionUpdates = new Map<string, InitialSessionUpdates>()
@@ -685,35 +688,7 @@ export class AcpAgentProcess {
       return
     live.connection.close()
     live.child.stdin?.end()
-    this.killTree(live.child, 'SIGTERM')
-  }
-
-  /**
-   * Signal the agent *and everything it spawned*.
-   *
-   * The agent starts its MCP servers as grandchildren, and those do not go away when
-   * the agent itself is signalled — they outlive it as orphans. Because the child was
-   * spawned `detached`, it leads its own process group, so a negative pid reaches the
-   * whole tree. Windows has no process-group signal here, so it falls back to the
-   * single-pid kill this replaced.
-   *
-   * @param child - the agent process spawned by this instance.
-   * @param signal - signal to deliver to the group.
-   */
-  private killTree(child: ChildProcess, signal: NodeJS.Signals): void {
-    if (child.exitCode !== null || child.signalCode !== null)
-      return
-    if (process.platform !== 'win32' && child.pid !== undefined) {
-      try {
-        process.kill(-child.pid, signal)
-        return
-      }
-      catch {
-        // The group is already gone, or `detached` did not take effect; fall through
-        // to the direct kill so a single doomed child is still signalled.
-      }
-    }
-    child.kill(signal)
+    this.owned?.killTree('SIGTERM')
   }
 
   private requireLive(generation: number): LiveAgent {
@@ -750,22 +725,14 @@ export class AcpAgentProcess {
     const profile = this.options.profile()
     const generation = ++this.generationCounter
     this.modelEfforts.clear()
-    this.stderrTail = ''
-    const child = spawn(profile.command, profile.args, {
-      cwd: profile.cwd ?? homedir(),
-      env: { ...process.env, ...profile.env },
-      stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true,
-      shell: process.platform === 'win32',
-      // Lead its own process group so `killTree` can signal the whole tree. Real agents
-      // start their MCP servers one level below this process; a single-pid kill leaves
-      // those grandchildren running, which is how orphaned MCP servers accumulate.
-      detached: process.platform !== 'win32',
+    const owned = startProcess({
+      command: profile.command,
+      args: profile.args,
+      ...profile.cwd === undefined ? {} : { cwd: profile.cwd },
+      env: profile.env,
     })
-    child.stderr?.setEncoding('utf8')
-    child.stderr?.on('data', (chunk: string) => {
-      this.stderrTail = (this.stderrTail + chunk).slice(-STDERR_TAIL_BYTES)
-    })
+    const child = owned.child
+    this.owned = owned
     const exited = new Promise<never>((_, reject) => {
       child.once('error', error => reject(this.startError(`failed to spawn "${profile.command}": ${error.message}`, error)))
       child.once('exit', (code, sig) => reject(this.startError(`agent exited during startup (code ${code ?? 'null'}, signal ${sig ?? 'null'})`)))
@@ -805,7 +772,7 @@ export class AcpAgentProcess {
     }
     catch (error) {
       connection.close()
-      this.killTree(child, 'SIGKILL')
+      owned.killTree('SIGKILL')
       throw error instanceof LlmError ? error : this.startError(`initialize failed: ${describeError(error)}`, error)
     }
     finally {
@@ -818,7 +785,7 @@ export class AcpAgentProcess {
       }
       catch (error) {
         connection.close()
-        this.killTree(child, 'SIGKILL')
+        owned.killTree('SIGKILL')
         const available = (init.authMethods ?? []).map(method => method.id).join(', ')
         throw new LlmError(
           `${PLUGIN_ID}: ACP agent "${this.options.route}" rejected authMethod "${profile.authMethod}"${available.length > 0 ? ` (available: ${available})` : ''}: ${describeError(error)}${this.stderrSuffix()}`,
@@ -844,8 +811,7 @@ export class AcpAgentProcess {
   }
 
   private stderrSuffix(): string {
-    const tail = this.stderrTail.trim()
-    return tail.length === 0 ? '' : `\n${tail}`
+    return this.owned?.stderrSuffix() ?? ''
   }
 
   private startError(message: string, cause?: unknown): LlmError {

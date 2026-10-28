@@ -1,12 +1,12 @@
 import type { McpServer } from '@agentclientprotocol/sdk'
 import type { HostLogger } from '../src/host/types/index.ts'
 import type { AcpAgentProfile } from '../src/shared/types.ts'
-import type { McpLoader, McpLoaderEntry } from '../src/host/service/mcp-servers.ts'
+import type { McpLoader, McpLoaderEntry } from '../src/host/domain/mcp-servers.ts'
 import { Context } from '@deepseek-ai/cordis'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import { afterEach, describe, expect, it } from 'vitest'
-import { AcpAgentProcess } from '../src/host/service/acp-agent.ts'
-import { collectAcpMcpServers, installedMcpServers, installMcpServerSource } from '../src/host/service/mcp-servers.ts'
+import { AcpAgentProcess } from '../src/host/transport/acp-agent.ts'
+import { collectAcpMcpServers, installedMcpServers, installMcpServerSource } from '../src/host/domain/mcp-servers.ts'
 import * as plugin from '../src/index.ts'
 
 /** A `dsh-mcp-client` stdio entry after schema defaults. */
