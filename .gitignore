@@ -8,3 +8,8 @@ coverage/
 .dsh-write-probe
 .omc/
 .serena/
+
+# Archify render artifacts: the JSON spec is the source of truth (docs/design/*.architecture.json).
+# Generated HTML is 600 KB+ and reproducible with the command recorded in the ADR.
+docs/design/*.html
+docs/design/*.visual-check.json

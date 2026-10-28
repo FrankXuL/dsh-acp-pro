@@ -1,0 +1,314 @@
+{
+ "schema_version": 1,
+ "diagram_type": "architecture",
+ "meta": {
+  "title": "dsh-acp-pro 目标分层架构",
+  "quality_profile": "showcase",
+  "viewBox": [
+   1180,
+   780
+  ],
+  "views": [
+   {
+    "id": "main-path",
+    "label": "主路径",
+    "focus": [
+     "dsh",
+     "surface",
+     "domain",
+     "transport",
+     "agent"
+    ],
+    "note": "一次生成请求：DSH 调 surface，surface 只编排，语义在 domain，协议与进程在 transport。"
+   },
+   {
+    "id": "records-to-client",
+    "label": "记录到客户端",
+    "focus": [
+     "surface",
+     "log",
+     "service",
+     "view",
+     "register",
+     "web"
+    ],
+    "note": "plugin:acp/* 记录经会话事件流回浏览器：service 决策、view 呈现、register 装配槽位。"
+   },
+   {
+    "id": "extension-points",
+    "label": "扩展落点",
+    "focus": [
+     "shared",
+     "domain",
+     "transport",
+     "service"
+    ],
+    "note": "新增 ACP v2 只改 transport；新增用量口径只改 domain；新增选择规则只改 service。"
+   }
+  ]
+ },
+ "components": [
+  {
+   "id": "dsh",
+   "type": "external",
+   "label": "DSH Host",
+   "sublabel": "LlmRuntime · Session",
+   "pos": [
+    40,
+    110
+   ],
+   "size": [
+    150,
+    64
+   ]
+  },
+  {
+   "id": "surface",
+   "type": "backend",
+   "label": "surface/",
+   "sublabel": "adapter · records",
+   "tag": "唯一读 ctx",
+   "pos": [
+    250,
+    110
+   ],
+   "size": [
+    190,
+    64
+   ]
+  },
+  {
+   "id": "domain",
+   "type": "backend",
+   "label": "domain/",
+   "sublabel": "turn · binding",
+   "pos": [
+    500,
+    110
+   ],
+   "size": [
+    170,
+    64
+   ]
+  },
+  {
+   "id": "transport",
+   "type": "backend",
+   "label": "transport/",
+   "sublabel": "process · protocol",
+   "pos": [
+    730,
+    110
+   ],
+   "size": [
+    175,
+    64
+   ]
+  },
+  {
+   "id": "agent",
+   "type": "external",
+   "label": "外部 ACP Agent",
+   "sublabel": "stdio 子进程",
+   "pos": [
+    960,
+    110
+   ],
+   "size": [
+    170,
+    64
+   ]
+  },
+  {
+   "id": "log",
+   "type": "database",
+   "label": "Session 日志",
+   "sublabel": "plugin:acp/*",
+   "pos": [
+    500,
+    320
+   ],
+   "size": [
+    170,
+    60
+   ]
+  },
+  {
+   "id": "shared",
+   "type": "database",
+   "label": "shared/",
+   "sublabel": "契约",
+   "pos": [
+    40,
+    440
+   ],
+   "size": [
+    150,
+    60
+   ]
+  },
+  {
+   "id": "service",
+   "type": "frontend",
+   "label": "client/service",
+   "sublabel": "来源 · 选择",
+   "pos": [
+    280,
+    560
+   ],
+   "size": [
+    190,
+    64
+   ]
+  },
+  {
+   "id": "view",
+   "type": "frontend",
+   "label": "client/view",
+   "sublabel": "模型座 · 卡片",
+   "pos": [
+    530,
+    560
+   ],
+   "size": [
+    170,
+    64
+   ]
+  },
+  {
+   "id": "register",
+   "type": "frontend",
+   "label": "client/register",
+   "sublabel": "槽位装配",
+   "pos": [
+    760,
+    560
+   ],
+   "size": [
+    175,
+    64
+   ]
+  },
+  {
+   "id": "web",
+   "type": "external",
+   "label": "DSH Web UI",
+   "sublabel": "composer · 对话",
+   "pos": [
+    985,
+    560
+   ],
+   "size": [
+    160,
+    64
+   ]
+  }
+ ],
+ "boundaries": [
+  {
+   "kind": "region",
+   "label": "Host（Node）",
+   "wraps": [
+    "surface",
+    "domain",
+    "transport",
+    "log"
+   ]
+  },
+  {
+   "kind": "region",
+   "label": "Client（Browser）",
+   "wraps": [
+    "service",
+    "view",
+    "register"
+   ]
+  }
+ ],
+ "connections": [
+  {
+   "id": "dsh-surface",
+   "from": "dsh",
+   "to": "surface",
+   "label": "注册 route",
+   "variant": "emphasis"
+  },
+  {
+   "id": "surface-domain",
+   "from": "surface",
+   "to": "domain"
+  },
+  {
+   "id": "domain-transport",
+   "from": "domain",
+   "to": "transport"
+  },
+  {
+   "id": "transport-agent",
+   "from": "transport",
+   "to": "agent",
+   "label": "JSON-RPC 双向",
+   "labelDy": 78
+  },
+  {
+   "id": "surface-log",
+   "from": "surface",
+   "to": "log",
+   "label": "快照",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "log-service",
+   "from": "log",
+   "to": "service",
+   "label": "事件流",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "service-view",
+   "from": "service",
+   "to": "view"
+  },
+  {
+   "id": "view-register",
+   "from": "view",
+   "to": "register"
+  },
+  {
+   "id": "register-web",
+   "from": "register",
+   "to": "web"
+  }
+ ],
+ "cards": [
+  {
+   "dot": "cyan",
+   "title": "依赖方向",
+   "items": [
+    "surface → domain → transport 单向，反向 import 由测试拦截",
+    "domain 不读 ctx、不起进程，可按纯函数单测",
+    "surface 是唯一允许接触 DSH 服务的位置"
+   ]
+  },
+  {
+   "dot": "emerald",
+   "title": "三个大文件的落点",
+   "items": [
+    "acp-adapter 1488 行 → surface/adapter + domain/turn + domain/binding",
+    "acp-agent 880 行 → transport/acp-process + transport/acp-protocol",
+    "model-seat 577 行 → client/service/selection + client/view/model-seat/*"
+   ]
+  },
+  {
+   "dot": "rose",
+   "title": "扩展落点",
+   "items": [
+    "ACP v2：新增 transport/acp-v2，domain 与 surface 不动",
+    "用量口径：只改 domain/usage 与标注文案",
+    "轨迹工具行：只加 client 侧 Definition，不碰 host"
+   ]
+  }
+ ]
+}
