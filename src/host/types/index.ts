@@ -1,5 +1,5 @@
 /** Settled outcome of one ACP permission request. */
-import type { AcpBindingStore } from '../service/session-store.ts'
+import type { AcpBindingStore } from '../domain/binding-store.ts'
 
 export type AcpPermissionDecision = 'allowed' | 'rejected' | 'cancelled'
 

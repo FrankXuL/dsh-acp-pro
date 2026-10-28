@@ -16,14 +16,16 @@ import type { AcpAdvertisedModel, AcpSession, AcpSessionEfforts } from './acp-ag
 import type { AcpPromptCapabilities } from './prompt-capabilities.ts'
 import type { PromptImage, PromptImages } from './transcript.ts'
 import type { PermissionTurn } from './permission.ts'
-import type { AcpBindingRecord, AcpBindingStore, AcpPendingTurn } from './session-store.ts'
+import type { AcpBindingRecord, AcpPendingTurn, BindingState, BindingTurnState } from '../domain/binding.ts'
+import type { AcpBindingStore } from '../domain/binding-store.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { LlmAdapter, LlmError, resolveRetryPolicy } from '@deepseek-ai/dsh-llm'
 import { PLUGIN_ID } from '../../shared/constants.ts'
 import { DEFAULT_CONTEXT_WINDOW, DEFAULT_MODEL_ID } from '../config/constants.ts'
 import { AcpAgentProcess, applyConfigOptions } from './acp-agent.ts'
-import { MemoryAcpBindingStore } from './session-store.ts'
+import { MemoryAcpBindingStore } from '../domain/binding-store.ts'
+import { bindingFromRecord, bindingRecordOf } from '../domain/binding.ts'
 import { SessionCoordinator } from './session-coordinator.ts'
 import { ChunkTranslator, usageDelta } from './chunk-translator.ts'
 import { createTurnSettlement, unknownTurnRefusal } from '../domain/turn.ts'
@@ -32,24 +34,10 @@ import { decidePermission, permissionOutcome } from './permission.ts'
 import { PromptCapabilitiesCache } from './prompt-capabilities.ts'
 import { consumedIds, conversationOf, fullPrompt, incrementalPrompt, systemText } from './transcript.ts'
 
-interface Binding {
-  provider: string
-  dshSessionId: string | undefined
+interface Binding extends BindingState {
   session?: AcpSession
-  cwd: string
-  model: string
-  consumed: string[]
-  usage: Usage | undefined
-  settingsRevision: number
-  acpSessionId?: string
-  protocolVersion: number
-  spawnFactsHash: string
-  replayBarrierIds: string[]
-  needsFreshInput: boolean
-  pending?: AcpPendingTurn
-  turnState: AcpSessionTurnState
-  revision: number
-  recovery: 'new' | 'loaded'
+  turnState: BindingTurnState
+  /** Live-only slots; never persisted. */
   persistQueue?: Promise<void>
   unlisten?: () => void
   activeTurn?: ActiveTurn
@@ -738,48 +726,16 @@ export class AcpAdapter extends LlmAdapter implements AcpSessionControl {
     const record = await this.bindingStore.load(provider, dshSessionId)
     if (record === undefined)
       return undefined
-    const binding: Binding = {
-      provider,
-      dshSessionId,
-      cwd: record.cwd,
-      model: record.model,
-      consumed: [...record.consumedIds],
-      usage: record.usage,
-      settingsRevision: 0,
-      acpSessionId: record.acpSessionId,
-      protocolVersion: record.protocolVersion,
-      spawnFactsHash: record.spawnFactsHash,
-      replayBarrierIds: [...record.replayBarrierIds],
-      needsFreshInput: record.needsFreshInput,
-      ...record.pending === undefined ? {} : { pending: { id: record.pending.id, messageIds: [...record.pending.messageIds] } },
-      turnState: record.pending === undefined ? 'idle' : 'unknown',
-      revision: record.revision,
-      recovery: 'new',
-    }
+    const binding: Binding = bindingFromRecord(record)
     this.bindings.set(key, binding)
     return binding
   }
 
   private recordOf(binding: Binding): AcpBindingRecord | undefined {
-    const dshSessionId = binding.dshSessionId
-    if (dshSessionId === undefined)
-      return undefined
-    return {
-      version: 1,
-      provider: binding.provider,
-      dshSessionId,
-      ...(binding.session?.sessionId ?? binding.acpSessionId) === undefined ? {} : { acpSessionId: binding.session?.sessionId ?? binding.acpSessionId },
-      cwd: binding.cwd,
-      protocolVersion: binding.session?.protocolVersion ?? binding.protocolVersion,
-      spawnFactsHash: binding.spawnFactsHash,
-      model: binding.model,
-      ...binding.usage === undefined ? {} : { usage: binding.usage },
-      consumedIds: [...binding.consumed],
-      replayBarrierIds: [...binding.replayBarrierIds],
-      needsFreshInput: binding.needsFreshInput,
-      revision: binding.revision,
-      ...binding.pending === undefined ? {} : { pending: { id: binding.pending.id, messageIds: [...binding.pending.messageIds] } },
-    }
+    return bindingRecordOf(binding, {
+      ...binding.session?.sessionId === undefined ? {} : { sessionId: binding.session.sessionId },
+      ...binding.session?.protocolVersion === undefined ? {} : { protocolVersion: binding.session.protocolVersion },
+    })
   }
 
   private persistBinding(binding: Binding): Promise<void> {

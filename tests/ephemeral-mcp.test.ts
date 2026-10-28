@@ -11,7 +11,7 @@ import process from 'node:process'
 import { describe, expect, it, vi } from 'vitest'
 import { ContextWindows } from '../src/host/service/context-windows.ts'
 import { PromptCapabilitiesCache } from '../src/host/service/prompt-capabilities.ts'
-import { MemoryAcpBindingStore } from '../src/host/service/session-store.ts'
+import { MemoryAcpBindingStore } from '../src/host/domain/binding-store.ts'
 
 const ROUTE = 'counting'
 const LOG = '/tmp/counting-agent.log'

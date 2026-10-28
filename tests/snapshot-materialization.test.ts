@@ -16,7 +16,7 @@ import { AcpAdapter } from '../src/host/service/acp-adapter.ts'
 import { AcpAgentProcess } from '../src/host/service/acp-agent.ts'
 import { ContextWindows } from '../src/host/service/context-windows.ts'
 import { PromptCapabilitiesCache } from '../src/host/service/prompt-capabilities.ts'
-import { MemoryAcpBindingStore } from '../src/host/service/session-store.ts'
+import { MemoryAcpBindingStore } from '../src/host/domain/binding-store.ts'
 
 const ROUTE = 'counting'
 const MOCK = join(import.meta.dirname, 'fixtures', 'mock-counting-agent.mjs')

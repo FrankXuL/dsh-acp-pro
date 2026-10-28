@@ -19,7 +19,7 @@ import { ContextWindows } from './service/context-windows.ts'
 import { collectAcpMcpServers, installMcpServerSource } from './service/mcp-servers.ts'
 import { PromptCapabilitiesCache } from './service/prompt-capabilities.ts'
 import { requestImageTarget } from './service/request-image.ts'
-import { FileAcpBindingStore } from './service/session-store.ts'
+import { FileAcpBindingStore } from './domain/binding-store.ts'
 
 /**
  * 0.1 cores offer `installSection` (namespace `llm-acp-pro`, live source swaps); 0.2 cores

@@ -1,30 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { Usage } from '@agentclientprotocol/sdk'
-
-export interface AcpPendingTurn {
-  id: string
-  messageIds: string[]
-}
-
-/** Durable minimum needed to reconnect or prevent an uncertain prompt from replaying. */
-export interface AcpBindingRecord {
-  version: 1
-  provider: string
-  dshSessionId: string
-  acpSessionId?: string
-  cwd: string
-  protocolVersion: number
-  spawnFactsHash: string
-  model: string
-  usage?: Usage
-  consumedIds: string[]
-  replayBarrierIds: string[]
-  needsFreshInput: boolean
-  revision: number
-  pending?: AcpPendingTurn
-}
+import type { AcpBindingRecord } from './binding.ts'
+import { isBindingRecord } from './binding.ts'
 
 export interface AcpBindingStore {
   load(provider: string, dshSessionId: string): Promise<AcpBindingRecord | undefined>
@@ -34,30 +12,6 @@ export interface AcpBindingStore {
 
 function bindingKey(provider: string, dshSessionId: string): string {
   return createHash('sha256').update(`${provider}\0${dshSessionId}`).digest('hex')
-}
-
-function isRecord(value: unknown): value is AcpBindingRecord {
-  if (typeof value !== 'object' || value === null)
-    return false
-  const record = value as Partial<AcpBindingRecord>
-  return record.version === 1
-    && typeof record.provider === 'string'
-    && typeof record.dshSessionId === 'string'
-    && typeof record.cwd === 'string'
-    && typeof record.protocolVersion === 'number'
-    && typeof record.spawnFactsHash === 'string'
-    && typeof record.model === 'string'
-    && (record.usage === undefined || (typeof record.usage === 'object' && record.usage !== null))
-    && Array.isArray(record.consumedIds)
-    && record.consumedIds.every(id => typeof id === 'string')
-    && Array.isArray(record.replayBarrierIds)
-    && record.replayBarrierIds.every(id => typeof id === 'string')
-    && typeof record.needsFreshInput === 'boolean'
-    && typeof record.revision === 'number'
-    && Number.isSafeInteger(record.revision)
-    && record.revision >= 0
-    && (record.acpSessionId === undefined || typeof record.acpSessionId === 'string')
-    && (record.pending === undefined || (typeof record.pending === 'object' && record.pending !== null && typeof record.pending.id === 'string' && Array.isArray(record.pending.messageIds) && record.pending.messageIds.every(id => typeof id === 'string')))
 }
 
 export class MemoryAcpBindingStore implements AcpBindingStore {
@@ -98,7 +52,7 @@ export class FileAcpBindingStore implements AcpBindingStore {
     catch (error) {
       throw new Error('ACP binding state is corrupt', { cause: error })
     }
-    if (!isRecord(parsed) || parsed.provider !== provider || parsed.dshSessionId !== dshSessionId)
+    if (!isBindingRecord(parsed) || parsed.provider !== provider || parsed.dshSessionId !== dshSessionId)
       throw new Error('ACP binding state is invalid')
     return parsed
   }

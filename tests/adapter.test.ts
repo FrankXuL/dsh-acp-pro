@@ -12,7 +12,7 @@ import { AcpAgentProcess } from '../src/host/service/acp-agent.ts'
 import { AcpAdapter } from '../src/host/service/acp-adapter.ts'
 import { ContextWindows, inferContextWindow } from '../src/host/service/context-windows.ts'
 import { PromptCapabilitiesCache } from '../src/host/service/prompt-capabilities.ts'
-import { FileAcpBindingStore, MemoryAcpBindingStore } from '../src/host/service/session-store.ts'
+import { FileAcpBindingStore, MemoryAcpBindingStore } from '../src/host/domain/binding-store.ts'
 
 const ROUTE = 'mock-acp'
 const MOCK = join(import.meta.dirname, 'fixtures', 'mock-agent.mjs')
