@@ -1,11 +1,12 @@
 /**
  * Narrow projections of the official client services this plugin uses on DSH 0.2 cores
- * (`configForms` from dsh-client-ui-settings, `locale`, `slots`, and the `remote.llm`
- * Remote namespace). Only the members called here are declared.
+ * (`configForms` from dsh-client-ui-settings, `locale`, `slots`, `remote.llm`, and the
+ * Typert `$mount` session-control namespace). Only the members called here are declared.
  */
 import type { Context } from '@deepseek-ai/cordis'
 import type { ComponentType, ReactElement } from 'react'
 import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { AcpSessionControlClient, AcpSessionControlContribution } from '../../shared/session-control-remote.ts'
 
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }
 
@@ -62,7 +63,9 @@ export interface SlotEntry {
   order?: number
   locale: string
   label?: () => string
-  inject?: () => unknown
+  /** Lower values render first; the native seat registers at 0 (engine-level shadowing). */
+  priority?: number
+  inject?: (arg?: any) => unknown
 }
 
 export interface SlotsService {
@@ -99,10 +102,77 @@ export interface LlmRemote {
   discoverModels: (settingsNs: string, request: { provider?: string }) => Promise<RemoteResult<LlmDiscoveredModel[]>>
 }
 
+/** PROTOTYPE (`#04`): the slice of the internal `modelDirectories` service the shadow picker reads. */
+export interface ModelSelection {
+  provider: string
+  model: string
+  reasoningEffort?: string
+}
+
+export interface ModelReasoningEffort {
+  id: string
+  name: string
+  description?: string
+}
+
+export interface ModelReasoning {
+  efforts: readonly ModelReasoningEffort[]
+  defaultEffort?: string
+}
+
+export interface ModelInfo {
+  id: string
+  name: string
+  description?: string
+  reasoning?: ModelReasoning
+}
+
+export interface ModelProviderGroup {
+  id: string
+  name: string
+  models: readonly ModelInfo[]
+}
+
+export interface ModelCatalogFailure {
+  id: string
+  name: string
+  message: string
+}
+
+export interface ModelDirectoryState {
+  current: ModelSelection | null
+  retainedEffort?: string
+  routable: boolean | null
+  groups: readonly ModelProviderGroup[]
+  failures: readonly ModelCatalogFailure[]
+  status: 'idle' | 'loading' | 'ready' | 'selecting' | 'error'
+  pending: ModelSelection | null
+  error: string | null
+}
+
+export interface ModelDirectoryFacade {
+  readonly store: {
+    getSnapshot: () => ModelDirectoryState
+    subscribe: (listener: () => void) => () => void
+  }
+  load: () => Promise<ModelDirectoryState>
+  select: (selection: ModelSelection) => Promise<RemoteResult<void>>
+}
+
+export interface ModelDirectoriesService {
+  directoryFor: (sessionId: string) => ModelDirectoryFacade
+}
+
 export type AcpClientContext = Context & {
   configForms: ConfigFormsService
   locale: LocaleService
   slots: SlotsService
+  /** PROTOTYPE (`#04`): internal service from `ui-model-selection`; injected lazily. */
+  modelDirectories: ModelDirectoriesService
   uiConversation: UiConversationService
-  remote: { llm: LlmRemote }
+  remote: {
+    llm: LlmRemote
+    $mount: (contribution: AcpSessionControlContribution) => Promise<() => Promise<void>>
+    acpSessionControl: AcpSessionControlClient
+  }
 }

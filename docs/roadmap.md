@@ -1,162 +1,207 @@
 # dsh-acp-pro 长期路线图
 
-> 调研基线：2026-10-25。ACP 侧读的是 `agentclientprotocol/agent-client-protocol` `main`（v1 schema `1.26.0` / v2 `2.0.0-alpha.9`）、`@agentclientprotocol/sdk@1.4.0` 与 `agentclientprotocol/registry`；DSH 侧是 `/Applications/DeepSeek Harness.app` 里的 `deepseek-harness` 源码；生态见 [acp-ecosystem-survey.md](acp-ecosystem-survey.md)。
+> 更新：2026-10-26。状态：实施中，当前推进 P0/P1；阶段是否完成以代码与验收证据为准。
+> 建议顺序：**兼容边界 → 配置与思考强度 → 会话可靠性 → 原生交互 → 生态与协议演进**。
+> 本文替代 2026-10-25 的版本排期；旧稿中的有用方向保留，尚无依据的周数和性能承诺撤回。
 
-## 1. 定位
+## 1. 目标和交付边界
 
-**让任意 ACP agent 在 DSH 里成为一等公民**，而不是"另一个聊天窗口"：
+让 ACP Agent 在 DSH 内可用、可控、可恢复，并以符合 DSH 习惯的界面展示真实执行。核心目标是在明确支持的标准 DSH 发行版上运行，不要求用户修改 DSH 源码；实验性接口和可选增强能力单独管理。
 
-1. 协议优先：UI 由 `initialize` 能力 + 首次 `session/new` 的 `availableCommands` / `configOptions` 驱动，**绝不维护硬编码的 agent 特性表**（ACP registry 48 个 agent 只发布分发信息，没有能力矩阵）。
-2. 视觉原生：工具行、计划、diff、审批都对齐 DSH 自己的 `ToolRow` 解剖（icon 14px → 标题 → 目标 → 状态 → 展开），不照搬任何第三方皮肤。
-3. 不撒谎：只写 `plugin:acp/*` 插件记录，不伪造 `tool/call` / `tool/result`；会话日志、导出、`session-query`、`repair` 里的事实必须和真实执行一致。
-4. 优雅降级：agent 少什么能力，UI 就少一块，而不是报错或空白。
+采用 [长期架构设计](design/acp-plugin-architecture.md) 的单包渐进方案。先复用现有代码解决实际能力缺口，再提取必要边界；不做全仓重写、不复制一个 Multica/MonoCode 产品、不为尚未出现的第二个宿主发布通用框架。
 
-## 2. 现状（v0.1 已完成）
+规划阶段产物：本路线图、架构设计、[实施前仓库审计](design/current-architecture-audit-2026-10.md)、[ACP / Multica / MonoCode 调研](design/acp-reference-research-2026-10.md)。用户现已要求继续实施；具体进度见文末，许可与归属保持完整。
 
-| 能力 | 状态 |
-|---|---|
-| ACP 进程管理、模型/effort 路由、增量 prompt、取消 | ✅ |
-| `tool_call` / `tool_call_update` → `plugin:acp/tool-call` 记录 + 卡片 | ✅（卡片待重做） |
-| `plan` → `plugin:acp/plan` 记录 + 卡片 | ✅（待并入计划行） |
-| `session/request_permission` → `plugin:acp/permission` 记录 + 只读卡 | ✅（按钮未接线） |
-| `usage` → DSH token usage | ✅ |
-| MCP servers 透传（stdio/http，`forwardMcp`） | ✅ |
-| claude-code 模型目录清洗（`INVALID_CATALOG`） | ✅ |
-| `mcp_result` 的终止/取消/空响应处理 | ✅ |
-| 设置页 6 个 agent 配置、bundle 安装、i18n、93 条测试 | ✅ |
+## 2. 基线校准
 
-**关键缺口**（按协议面归类）：
+| 项目 | 当前结论 | 后续动作 |
+| --- | --- | --- |
+| 模型与思考强度 | 已有 configOptions 解析、模型优先 set_config_option、reasoning 元数据和生成前 effort 设置 | 复现现场问题，检查模型作用域、状态更新和 UI 链路；不重复实现已存在的协议调用 |
+| provider / prompt / 取消 / 审批 / MCP / 记录卡 | 已有实现与测试，具体覆盖见审计 | 作为回归基线保留 |
+| 认证 | 已支持 profile authMethod、ACP authenticate 和认证错误映射 | P4 关注登录引导/凭据交互的缺口，不重做基础认证调用 |
+| DSH 依赖 | 本地 symlink 环境可分析；peer 范围为 *；记录与渲染 API 有实验性边界 | 不以本地运行推断发行版兼容，P0 建立支持矩阵 |
+| 会话恢复与完整控制面 | 当前绑定主要在内存；当前会话模式/通用配置等交互未完整接通 | P1/P2 建立明确状态与生命周期 |
+| 协议与生态资料 | 旧稿混用了当前实现、稳定规范、SDK unstable 和未来方案 | 以固定版本调研为依据；不再把 set_model 一概视作某个 Agent 私有方法 |
 
-| ACP 面 | 现状 | 目标 |
-|---|---|---|
-| `available_commands_update` | 忽略 | 映射为 DSH `/命令` |
-| `current_mode_update` / `session/set_mode` | 忽略 | composer 模式 chip |
-| `config_option_update` / `session/set_config_option` | 仅记录 | 模型/effort/reasoning 选择器（**注意：ACP 没有 `session/set_model`，当前适配器调用的是非标准扩展**） |
-| `session/list` / `resume` / `load` / `close` / `delete` / `fork` | 只用 `close` | 重启后恢复 ACP 会话 |
-| `usage_update.cost`、`session_info_update`、`notice` | 忽略 | 回合成本徽标、标题同步、系统提示 |
-| `compaction_update` / `compaction_summary_chunk` | 忽略 | 压缩事件行 |
-| 图片/音频 content chunk | 部分 | 附件行渲染 |
-| 子 agent（ACP RFD / v2 child session / v1 `subagent_update`） | 无 | 嵌套卡片（永不并入折叠组） |
-| `elicitation/create` | 无 | 表单/URL 弹层（ACP 要求模态） |
-| 认证 `authenticate` / `authMethods` | 无 | 登录流程（terminal/API key/env） |
-| registry 一键安装 | 无 | 从 48 个 agent 里装 |
-| ACP v2（draft） | 无 | 版本协商 + 双形状兼容层 |
+具体代码证据集中在审计中。用户的思考强度问题尚未做真实 UI/Agent 复现，规划不宣称已经定位或修复现场故障。
 
-## 3. 协议事实（决定架构的硬约束）
+## 3. 能力优先级
 
-- **版本**：`protocolVersion` 是整数主版本；v1 稳定，v2 明确 draft（`schema-v2.0.0-alpha.9`，2026-10-16）。v2 用 `session/resume` + `replayFrom` 取代 `load`，移除 `session/set_mode` 和整个 `fs/*` / `terminal/*`，新增 `state_update`、`plan_update(planId)`、`elicitation`。**现在只实现 v1，v2 留协商开关。**
-- **能力协商**：客户端声明 `fs{readTextFile,writeTextFile}`、`terminal`、`auth.terminal`、`session{compaction,configOptions,notices}`、`elicitation{form,url}`；agent 声明 `loadSession`、`promptCapabilities{image,audio,embeddedContext}`、`mcpCapabilities{http,sse}`、`sessionCapabilities{list,delete,additionalDirectories,resume,close}`、`authMethods`。省略即不支持。
-- **模型选择**：`session/set_config_option {configId, value}`，`category ∈ mode|model|model_config|thought_level|other`；`set_mode` 是旧路径。我们当前调用的 `session/set_model` 不在 schema 里（claude-code-acp 的私有扩展），必须改成"优先 config option，探测到扩展才回退"。
-- **工具内容**：`content[]` 整组替换（v2 才有 append chunk）；`rawInput/rawOutput` 是 `unknown` 且带 `x-deserialize-default-on-error`，可能静默丢 payload（issue #1979 就是权限框因此丢上下文）。
-- **turn 级 token 用量不在 v1 稳定面**：`PromptResponse` 只有 `stopReason`；`usage_update` 是会话级上下文规模 + 累计成本；按回合计费只能自己差分（Roadmap v0.3 做）。
-- **计划**：v1 `plan.entries[]` 无 planId；v2 才有 `plan_update`。折叠/展开必须按"当前计划"单实例处理。
-- **注册表**：`https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json`，48 条，CI 只验证 `authMethods`；`distribution` 支持 `npx`/`uvx`/`binary`（含 sha256）。**没有能力矩阵**，所以必须运行时探测。
-- **DSH 自身先例**：`packages/acp/acp` 是 DSH 的 ACP server，已实现 `session/list|resume|close`、`set_config_option(model, reasoning_effort)`、图片 prompt、stdio/HTTP MCP、权限；明确不做 modes/commands/plans/terminals/fs/elicitation。设计记录 `.agents/notes/implemented/simplification/2026-07-23-acp-automation-only-protocol.md` 说明 ACP 在 DSH 里定位"自动化协议"，交互式 UI 是我们的增量，不是上游默认目标。
+| 能力 | 目标 | 阶段 | 验收依据 |
+| --- | --- | --- | --- |
+| 模型、思考强度 | 当前模型的选项准确，设置确实用于后续执行 | P1 | 指定模型元数据 + 设置请求/回包 + UI 和后续 prompt |
+| 模式、通用配置、Agent 命令 | 按当前会话声明呈现，未知 category 仍可使用通用控件 | P1 | 配置变更、Agent 主动更新、无能力隐藏、错误不冒充成功 |
+| 取消、断连、恢复、进程清理 | 无串会话、无悬挂审批、恢复不自动重提结果未知的回合 | P2 | 故障/重启/恢复协议样例和真实 Agent 冒烟 |
+| 工具、计划、diff、位置、思考、权限 | 真实事件 + 一致交互 + 可访问的细节查看 | P3 | 老记录回放、键盘交互、错误/审批不被折叠 |
+| 图片/资源、用量、通知、压缩 | 按实际协议能力逐项完善 | P3 | 内容不丢失，用量来源标明，回放不重复统计 |
+| 登录、fs/terminal、注册表、子会话 | 目标 Agent 有需求且宿主具备条件时接入 | P4 | 每项独立能力证据；不把 MCP 等同 ACP 客户端工具 |
+| ACP v2 | 稳定与需求满足后独立适配 | P4 研究，后续实施 | v1 不回归，v2 专属样例和目标 Agent 验证 |
 
-## 4. 竞品与可抄的细节
+不同 Agent 不必通过它未声明支持的同一组功能。首批真实验证建议选 Codex ACP 的 reasoning 路径，以及另一个具有不同配置/能力形状的 Agent；具体版本和认证环境在 P0 固定，不能在规划时写成已验证。
 
-- **Zed**（ACP v2 客户端，Rust）：`crates/agent_ui/src/conversation_view/thread_view.rs`（15k 行）——7 态工具（pending/in_progress/waiting_confirmation/completed/failed/rejected/canceled）、`render_edits_summary` 回合 diff 汇总、`subagent_card.rs`、token/cost 徽标、`activity_duration`。
-- **monoCode**（Tauri+React）：`src/features/sessions/ui/AgentTranscript.tsx`（5479 行）行分类最全：`ActivityToolRow` / `ActivityThinkingRow` / `ActivityStatusRow` / `ActivityNoteRow` / `PhaseStep`（连续调用折叠成阶段）/ `SubagentStack` / `ApprovalControls` / `PlanPreview` / `TurnMetricsBadge`；`wordFade.tsx` 有节奏化流式（320ms、120–400ms 自适应、`prefers-reduced-motion` 关闭）；**计时在等待审批时暂停**（`useElapsedFrom(startedAt, paused)`）；子 agent 刻意排除在折叠 trail 之外。
-- **acp-components**（React+Zustand，最接近"可直接抄的 ACP 卡片"）：`packages/react/src/components/chat-view/ToolCallCard.tsx` 的 `kindIcon` 直接按 `ToolKind` 映射、header 是 `<button aria-expanded>`、`LocationChip` 显示 `basename:line` 且键盘可达；`PlanView` 显示 n/m 与进行中 spinner；`ThoughtView` 流式时自动展开、结束后自动折叠。
-- **agent-shell**（Emacs，23 个 agent）：编辑器原生而非聊天框的参考。
-- **Exo / necoder / Athas / Alchemist / Bellows**：并行 worktree、注册表一键装、实时 agent 树、共享会话——属于 v0.7+ 的团队形态参考。
-- **通用模式**：行五槽（图标/动词/目标 chip/状态/展开）；弱标题兜底（monoCode 的 `isWeakToolTitle` + 组合标题）；失败行永不折叠；审批行永不折叠；流式思考结束后自动折叠；成本徽标放回合头，不放全局底栏；行是 button、chip 键盘可达、流式 `role="status"`。
+## 4. 分阶段实施
 
-## 5. 路线（按版本，含验收）
+### P0：冻结事实，验证 DSH 边界
 
-### v0.2 视觉与事件对齐（1–2 周）
-- 工具行重做为 DSH `ToolRow` 同构（无边框、14px 图标、单行标题+等宽摘要、右侧脉冲/勾/叉+耗时、展开区无边框）。
-- 计划折叠为一行 `计划 n/m`，展开 checklist；diff 去卡片。
-- 权限卡改为行内 chip（含 pending 黄条），保留只读语义。
-- 修「深度求索中」计时（先采样确认三种假设），把 ACP 计时落到插件记录节点。
-- `usage_update.cost` → 回合成本徽标；`session_info_update.title` → DSH 会话标题（如果可写）。
-- **验收**：Claude Code + Codex 两个会话，视觉与原生工具行同屏不可分辨；`vitest` 覆盖行模型快照；截图进 `docs/`。
+**结果**：知道支持哪一个标准 DSH 版本、思考强度断在哪一层，以及哪些增强能力能只靠插件实现。
 
-### v0.3 控制面（2 周）
-- `available_commands_update` → `commandUi.register` 动态 `/命令`（提交时按 ACP 约定把 `/name args` 当 prompt 发出）。
-- `config_option_update` + `session/set_config_option` → 模型/effort 选择器接 composer chip；`set_model` 作为探测到的扩展回退。
-- `current_mode_update` + `set_mode` → 模式 chip。
-- 每回合 token 差分 + 成本；`notice` 渲染为系统行；`compaction_update` 渲染压缩行。
-- **验收**：三个 agent（Claude/Codex/OpenCode）分别在 UI 里切模型、切模式、跑 `/compact` 等命令成功；无能力时 chip 自动隐藏。
+工作范围：
 
-### v0.4 会话生命周期（2 周）
-- 按 DSH sessionId 持久化绑定（agent、acp sessionId、cwd、model、consumed ids）到插件存储。
-- `session/list` / `resume` / `load`（v1 形状）支持重启恢复；不支持时回退当前"全量上下文重放"。
-- `session/fork` / `delete` / `new` 生命周期与 DSH 会话删除/复制对齐；`close` 保证幂等。
-- **验收**：重启桌面端后同一 DSH 会话继续 ACP 上下文；agent 不支持 resume 时提示"上下文将重放"。
+1. 记录当前 DSH/SDK/Agent/插件版本与现有检查结果；将“源码已实现”“mock 验证”“真实 Agent 验证”“标准 DSH 验证”分列。
+2. 追踪具体场景中的 configOptions、resolveModel(model)、UI 控件、GenerateOptions.reasoningEffort、set_config_option 与返回选项；只记录必要配置与状态，不采集聊天正文或密钥。
+3. 核验 provider、approval、appendPluginRecord、Conversation Definition、chat/input 插槽、RPC、插件数据目录和 session lifecycle 的来源与语义。
+4. 以一个最小纵向切片提取 DSH 依赖，优先处理 loader/fiber 内部接缝和 Models 页面 DOM 提示改写；把提示迁入插件设置/帮助，保留合法的 cordis.patch.yml bundle 声明。暂不大规模移动文件，不假设可选静态导出能靠运行时判断降级。
 
-### v0.5 富内容与交互（2–3 周）
-- 图片/音频 content chunk → 附件行；`resource_link` / embedded resource 的 prompt 发送。
-- `elicitation/create` → 模态表单（复用 `ask-question-row` 的交互语言），URL 模式显示目标 host。
-- 权限卡按钮接线：host 暴露 `acp/respondPermission` RPC，client 卡片直接答复；策略三档（always→自动允许、never→自动拒绝、ask→内联卡）；与 DSH 原生审批框二选一，不重复弹。
-- **验收**：Claude Code 的 elicitation 与权限按钮端到端；截图 + 权限拒绝路径测试。
+主要起点：`src/host/apply.ts`、`src/host/service/acp-adapter.ts`、`src/host/service/acp-agent.ts`、`src/client/index.ts`、`package.json` 和插件开发指南。
 
-### v0.6 多 agent 与子会话（3 周）
-- ACP 子会话：v1 `subagent_update`（unstable）与 v2 child-session 双形状；父 transcript 渲染嵌套卡（`N steps, M failed`），不并入折叠组；权限上提到根会话。
-- ACP agent 作为 DSH 子 agent / teammate 跑，父会话显示 `DetailsRow` + 子会话树。
-- **验收**：Codex/Claude Code 的 subagent 任务在 DSH 里可展开、可跳转。
+**退出条件**：
 
-### v0.7 能力面与注册表（2–3 周）
-- **不做** v1 `fs/*` / `terminal/*`：v2 已整体移除，方向是"客户端把工具当 MCP server 暴露给 agent"；继续走现有 MCP 透传。
-- 认证：`authenticate` + `authMethods`（env / terminal / API key），设置页按 agent 存 env；敏感值只写凭据库。
-- ACP registry 集成：设置页 Discover，"一键安装"映射 `distribution`（npx/uvx/binary + sha256 校验），写 profile 的 agent 配置。
-- `mcpCapabilities` 协商（http/sse）与 `session.notices` 能力门槛。
-- **验收**：从 registry 装一个此前没配过的 agent（如 Gemini CLI）并跑通一轮。
+- 在至少一个未经本插件修改的 DSH 发行版上，从构建 bundle 到注册 provider、发送/取消、审批完成基本冒烟；记录具体版本和失败项。
+- 有一条完整 reasoning trace；若现场无法复现，保留限制，并用现有 mock 中不同模型的 levels 场景建立可失败的回归用例。
+- 记录/渲染等可选接口缺失的加载与降级策略有实际测试；必要接口缺失时给出明确不支持结果。
+- 为 P1 当前会话控件确认可用通道；若无可用 RPC/插槽，先限定为现有 DSH 原生模型/effort 通路，不承诺通用面板已可实现。
 
-### v0.8 分发与打磨（1–2 周）
-- npm 发布 + DSH plugin market 索引条目（`index.json` 格式见 `packages/boot/plugin-market`），安装/升级走 Discover。
-- 设置页：agent CRUD、`forwardMcp`、权限策略、语言。
-- CI 矩阵：mock agent 协议一致性（14 种 update × 能力排列）、`tsc`、`vitest`、夜间真 agent 冒烟（Claude/Codex/Gemini/OpenCode/Goose）。
-- 文档：README、`docs/architecture.md`、本路线图、故障排查（含"完全权限预设 → ACP 权限被自动拒绝"这一坑）。
+### P1：配置状态正确，模型与思考强度真正可用
 
-### v1.0 稳定（持续）
-- ACP v2 协商（稳定后切换）：双形状读取、`state_update`（前景/后台双维状态）、`plan_update`。
-- 上游提案（见 §7）。
-- 语义化版本 + 兼容矩阵 + 变更日志；性能门槛（记录 append 不阻塞流、单会话 1k 工具调用下 UI 仍 60fps）。
+**结果**：用户看到的当前值与 Agent 确认值一致，模型变化会更新其可选 reasoning levels。
 
-## 6. 架构演进
+工作范围：
 
-**Host**
-- `AcpAgentRegistry`：按 provider 缓存 `initialize` 结果（agentInfo.version 作 key），能力探测（configOptions/commands/modes）缓存到插件设置，agent 升级自动失效。
-- `AcpSessionStore`：`dshSessionId → {agent, acpSessionId, cwd, model, consumed, createdAt}` 持久化，替代当前纯内存 `bindings`。
-- `record-sink` 升级到记录 schema v2（`version` 字段 + 迁移），upsert 语义（toolCallId/planId 幂等），写失败仍静默禁用但打点。
-- 记录量控制：tool content 8k / output 20k / diff 4k 截断保留（已有），新增合并窗口（同 callId 100ms 内 update 合并）。
-- 错误模型：`AcpFailureStage` 扩展（auth / config / resume），对外统一 `LlmError` code。
+1. 把模型目录发现、连接能力与当前会话配置分开；修复经测试确认的模型作用域/刷新问题。
+2. 建立会话配置归并与串行写入，应用设置响应的全量 configOptions，并接收 Agent 主动更新。
+3. 复用 DSH 原生模型与 effort 控件；依据 P0 结果补当前会话模式、通用配置面板和动态命令入口。resolveModel 不带 sessionId，模型能力发现不得借用活动会话；若没有原生选择同步契约，同一配置只保留一个可编辑入口。
+4. 保留标准配置优先和必要的版本限定兼容路径；不硬编码 low/medium/high/max 为所有 Agent 的通用能力。
 
-**Client**
-- 节点：`acp-tool-call`、`acp-plan`、`acp-permission`、`acp-notice`、`acp-compaction`、`acp-worker`、`acp-subagent`。
-- 共享 `AcpRowModel`（variant/title/target/summary/state/duration/body），host 与 client 各自可测；行渲染器只消费 model。
-- composer：模式/模型 chip 走 `conversation.input.dock`；命令走 `commandUi.register`；权限按钮走 host RPC。
-- 右栏：ACP 计划可选复用 `sidebar.right.pane.tab`（对齐 DSH plan mode）。
-- i18n：新增键全部进 `zh`/`en`；时间/成本用 `Intl`。
+主要起点：`acp-agent.ts` 的 `sessionModels/sessionEfforts/selectModel/selectEffort`，`acp-adapter.ts` 的 `resolveModel/run`，客户端设置/输入区接入，跨端配置 DTO。
 
-## 7. 要向上游提的（DSH / ACP）
+**退出条件**：
 
-1. **DSH**：外部 agent 的"工具行"渲染扩展点（让 `plugin:*` 记录能用原生 `ToolRow` 渲染），比每个插件自绘更可持续。
-2. **DSH**：插件可注册的审批答复通道（现在插件只能经 `ctx.approval`，客户端无法直接答）。
-3. **ACP**：回合级 token 用量（RFD `end-turn-token-usage` 已在讨论）；`rawInput` 反序列化丢数据的 issue #1979；子会话 RFD 的稳定化。
-4. **ACP registry**：增加能力矩阵或探测端点（目前只能运行时探测）。
+- 不同模型返回不同 levels 的测试先失败再修复通过；切换模型后不存在旧选项残留或非法旧偏好自动发送。
+- 设置失败、Agent 主动修改、缺失 category、未知 category、分组 select 与缺失 thought_level 均有针对实际契约的覆盖。
+- 一条真实 Agent 链路证明用户选择、set_config_option 回包和后续回合一致；另一个 Agent 验证能力缺失/不同配置的正常降级。
+- 同时打开两个 DSH 会话时，各自配置互不串扰；生成中设置明确标为下一回合应用，停止仍有效。
 
-## 8. 明确不做
+### P2：会话可恢复，生命周期可解释
 
-- 伪造 `tool/call` / `tool/result` 事件冒充原生工具（语义假、易碎、污染日志）。
-- 按 agent 名字硬编码 UI/特性（只认协议声明）。
-- v1 的 `fs/*` / `terminal/*` 客户端能力（v2 已移除；改走 MCP）。
-- 自绘终端仿真器（DSH 有 jobs/terminal 行，ACP 的 terminal content 走只读输出）。
-- 在 v2 稳定前把它当默认协议。
+**结果**：重启和故障后不会悄悄混入其他 workspace、重复工具结果或把新会话说成已恢复。
 
-## 9. 风险
+工作范围：
 
-| 风险 | 影响 | 对策 |
-|---|---|---|
-| DSH 内部 API 漂移（`appendPluginRecord` 非公开契约） | 记录失效 | 能力探测 + 失败降级为 reasoning 文本；锁 DSH 版本范围；上游提案 |
-| ACP agent 私有扩展（`_meta.jetbrains.air.*`、`set_model`） | 隐藏功能拿不到 | 探测式使用，缺失即降级；文档标注 |
-| 热重载 provider 泄漏（已验证） | 需重启桌面端 | 文档写明；长期用 bundle 重载而非禁用/启用 |
-| 审批策略 never 导致 ACP 请求被拒 | 空响应 | 已在 README 写明；v0.5 权限接线时按策略映射 |
-| v2 迁移 | 返工 | 记录 schema 留 `protocolVersion` 字段，读取层同时接受 v1/v2 形状 |
+1. 提取会话协调器与进程管理边界；保持已验证的增量 prompt、取消和关闭行为。
+2. 增加版本化绑定存储，使用 P0 确认的插件数据目录；保存最小身份、已确认状态和发送前的 pending-turn 标记，确认后与 consumed 游标原子结算，不复制凭据或整套 transcript。
+3. 按 Agent 声明及已验证版本实现 load/resume 等恢复路径；list、fork、delete、close 分别决策，不作为捆绑必选能力。
+4. 建立恢复回放与实时更新的区分，并对 pending turn 对账；无可靠证据时保留结果未知，禁止自动重提及通过新会话 fullPrompt 间接重放，由用户决定后续操作。恢复不可用时明确进入新会话，历史上下文重放不等价于恢复内部状态；无 Agent 幂等键时不承诺 exactly-once。
 
-## 10. 下一步
+主要起点：`acp-adapter.ts` 的 `bindings/run/dispose`、`acp-agent.ts` 的连接/会话/close、`prompt.ts`、记录归并和未来存储适配器。
 
-1. v0.2 开工：先采样「深度求索中」计时（确认 startTime 假设），同时重做 `record-nodes.tsx` + `styles/records.ts`。
-2. v0.3 的模型切换先改成 `set_config_option`（对齐 DSH 自己的 ACP server 做法）。
-3. 把 `docs/acp-ecosystem-survey.md`、本文件、E2E 截图一起提交，作为公开仓库的"设计与调研"底稿。
+**退出条件**：
+
+- 两会话、两 cwd、同一 provider 的隔离测试通过；Agent generation 变化后不会复用旧连接句柄。
+- 桌面重启后支持恢复的 Agent 能继续原会话；不支持恢复的 Agent 进入可识别的新会话路径。
+- 取消、Agent 退出和关闭均结算待决请求/审批，dispose 可重复调用；恢复回放不重复计费或重复工具卡。
+- 验证“Agent 工具副作用已发生、本地确认前崩溃”：有恢复证据时正确对账，无证据时保持未知且不自动重提；不支持恢复的新会话同样抑制未知回合历史重放。明确可能暂停实际未送达请求的取舍。
+
+### P3：补齐原生交互与内容
+
+**结果**：ACP 的工具、计划、思考、审批和富内容在 DSH 内可以自然浏览和操作，且历史会话可回放。
+
+工作范围：
+
+1. 拆分行模型/渲染器，优先工具状态、计划、diff、位置跳转与思考折叠；沿用 DSH tokens 和插件 i18n。
+2. 继续使用原生审批；只有 P0 验证答复通道后再做行内操作，与同一待决请求绑定，不生成第二套授权结果。
+3. 按 Agent 能力补资源/图片/音频、通知、压缩、标题和用量；仅为已经实现的客户端契约声明 capability。
+4. 兼容旧 plugin records；以固定数据样例采样长会话性能后再设预算。
+
+主要起点：`src/shared/records.ts`、`acp-record-sink.ts`、`chunk-translator.ts`、`src/client/conversation/records.ts`、`components/record-nodes.tsx`、样式与 locale。
+
+**退出条件**：
+
+- 相同 ACP 事件在实时显示和历史恢复中产生相同事实；未知新增字段、旧版记录不导致页面崩溃。
+- 工具失败/待审批保持可见，展开区可键盘操作，文件位置可跳转；真实 DSH 截图和交互结果留档。
+- 审批至多结算一次，取消/关闭后不能操作旧请求；历史权限记录不会重新请求授权。
+- 用量区分上下文、会话累计、原生回合值与估算；缺失数据不显示精确成本。长会话记录量、更新耗时和渲染样例可复测。
+
+### P4：扩展生态与稳定发布
+
+**结果**：新 Agent 更容易接入，协议升级有明确边界，发布不依赖某台机器的 symlink 环境。
+
+按需求分批处理，不全部塞进一个版本：
+
+1. Agent 配置/认证诊断与 registry 发现、安装；使用 registry 及探测矩阵辅助选择，但运行时能力仍以握手和会话为准。
+2. 对目标 Agent 必须的 v1 fs/terminal 或 elicitation 实现对应宿主适配；如果没有实际需求，保持未宣告。
+3. 子会话按已验证协议扩展显示，保留父子身份和审批归属；不自动扩展到团队任务调度产品。
+4. 独立研究 v2；待稳定性和 Agent 支持满足后写专门迁移 ADR，避免把 v1/v2 payload 到处混在 UI 中。
+5. 发行版兼容矩阵、干净环境构建安装、升级/回退、README/排错与变更日志；npm/市场发布作为后续明确交付项，不在本轮执行。
+
+**退出条件**：每项增强各自通过“能力声明 → 请求 → 结果 → 缺失降级”验证；公开支持矩阵只列实测组合；升级能读取既有记录/绑定，回退策略由变更类型明确。
+
+## 5. 依赖与可拆分顺序
+
+```mermaid
+flowchart LR
+  P0[P0 兼容与现场证据] --> P1[P1 会话配置]
+  P1 --> P2[P2 生命周期]
+  P1 --> P3[P3 展示与交互]
+  P2 --> P4[P4 生态与发布]
+  P3 --> P4
+```
+
+P2 和 P3 只有在共享 DTO/记录契约已定且文件所有权不重叠时才并行；完整仓库门禁串行运行。每个实施 PR 提供一个用户可见结果或一个可测依赖边界，包含相关测试、文档和回退办法。
+
+第一批实施建议依次拆为：
+
+| 切片 | 交付 | 主要范围 |
+| --- | --- | --- |
+| A | 支持矩阵与 reasoning 现场证据；必要的 DSH 边界最小验证 | 文档、诊断、现有集成入口 |
+| B | 按模型返回准确 reasoning 元数据并更新会话配置 | acp-agent、acp-adapter、mock/tests |
+| C | 原生控件与会话面板共享确认状态，补模式/通用配置 | config DTO、Host RPC、Client 控件；以 A 的接口结论为前提 |
+| D | 持久绑定与第一种真实恢复路径 | session coordinator、store、lifecycle tests |
+| E | 工具/计划/权限展示纵向切片与旧记录兼容 | record sink、shared records、client renderer |
+
+以上是实施切片及依赖关系；当前交付状态见第 9 节，实机退出条件仍需逐项取得运行证据。
+
+## 6. 验证规则和完成定义
+
+仓库规定的每个变更批次门禁：
+
+```bash
+node node_modules/typescript/bin/tsc --noEmit
+node node_modules/vitest/vitest.mjs run
+```
+
+Host/Client 运行变更另外按 `skills/engineering/dsh-plugin/SKILL.md` 构建 `dist/`，重新加载/重启 DSH 后验证 provider 与 UI。依赖受限环境使用已有本地二进制，不以自动下载替代环境问题诊断。
+
+测试层次：协议/状态用 mock fixture 验证；DSH 接口用契约/加载验证；真实 Agent 冒烟验证配置和恢复语义；UI 验证需要的操作与回放。只扩充本阶段真实风险相关用例，不建立所有能力排列组合的穷举矩阵。
+
+发布前必须保有：未经修改的 DSH 支持组合、已验证 Agent/SDK 版本、记录/绑定兼容结果、已知缺失能力与可复现证据。未运行的真实 Agent、标准 DSH、构建安装或 UI 项必须明确列出，不能用单元测试通过代替。
+
+## 7. 对旧路线的保留与修订
+
+| 旧方向 | 本轮处理 |
+| --- | --- |
+| 原生工具/计划行、真实 plugin records | 保留；先配置与兼容，再做视觉重构 |
+| 模型切换先迁到 set_config_option | 当前代码已实现；改为补模型/会话作用域、更新和 UI 闭环 |
+| 固定 1–3 周排期、所有 Agent 都能切模式/跑 compact | 撤回无依据排期；按阶段退出条件和具体 Agent 能力验收 |
+| agentInfo.version 级能力缓存 | 改为安装、连接、会话、DSH 宿主分层；配置不能当全局常量 |
+| 自动全量历史重放就是恢复 | 区分新会话与真实恢复，并处理副作用、重复更新和消费游标 |
+| v2 移除 fs/terminal，所以 v1 永不支持 | 改为由目标 Agent 实际需求决定，不虚报客户端能力 |
+| registry 没有能力资料 | 更正：已有协议探测矩阵；但它不等于当前会话配置的权威来源 |
+| 把成本累计差分当精确每回合成本 | 仅在满足归因条件时标为估算；缺失数据不猜测 |
+| 把 set_model 视为单一 Agent 私有接口 | 区分官方 SDK unstable/遗留面与稳定配置协议 |
+
+历史生态采样仍保留在 [2026-10-25 survey](acp-ecosystem-survey.md)，作为当时的观察，不作为当前接口承诺。
+
+## 8. 规划阶段验收记录（实施前基线）
+
+- 已形成架构、分阶段计划、仓库审计和一手实现调研，并通过主架构定向审查；审查补入了 pending-turn/unknown 恢复边界与对应验收。
+- 已独立核对 reasoning 的模型作用域证据、DSH 实验性记录边界，以及 Multica/MonoCode 的固定源码。现有运行代码检查基线：TypeScript 退出码 0；Vitest 12 个文件、93 个测试通过；这些结果不证明真实 DSH/Agent 已通过验收。
+- 未实施 runtime 重构，未安装/升级 Agent，未运行真实 DSH/Agent UI 场景，未提交或发布。
+- 用户原文 `mit` 的具体含义尚未补充，暂按标准 DSH 无补丁运行理解；许可归属保持完整。
+
+## 9. 实施进度
+
+- P0：已核验本机 DSH 安装观测、原生 reasoning 的源码调用链和扩展接口边界，详见[兼容性证据](dsh-plugin-dev/09-compatibility.md)。源码契约不等于已安装应用实测；完整 P0 仍未验收。
+- P1 代码已覆盖模型专属 reasoning、会话 select 配置、模式和动态命令。原生模型/思考强度保持唯一编辑入口；输入区面板显示确认状态，Host 队列协调设置与 prompt。真实 Typert Registry/Gateway 已验证控制调用，应用内面板与选择器待验收。
+- P2 代码已覆盖持久绑定、能力驱动 load、消费游标、恢复用量基线及未知结果阻断。未确认回合不自动重提；显式新会话建立历史重放边界。确定性故障回归与真实 Agent 的恢复验收分别记录。
+- P3 本批交付工具位置与 diff 跳转、状态可见性、键盘操作、长内容提示及旧记录兼容；继续使用原生审批和真实 `plugin:acp/*` 记录。真实截图、长会话性能采样和能力条件性增强仍按阶段退出条件推进，未宣称全部完成。
+- 已移除 Models 页面 DOM 提示改写，补充默认不发送 prompt 的 smoke 诊断。最终门禁、审查和范围见[实施记录](../.omc/plans/dsh-acp-evolution.md)，后续 DSH 可直接执行[实机验收交接](dsh-verification-handoff.md)。本会话未安装、重启 DSH 或执行真实 Agent 验收；P4 的条件性生态与发布项目保留为后续工作。

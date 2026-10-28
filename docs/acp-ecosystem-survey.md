@@ -1,5 +1,7 @@
 # ACP ecosystem survey — sampled 2026-10-25
 
+> Historical sample. For the 2026-10-26 corrections, pinned ACP / Multica / MonoCode evidence, and stable-versus-unstable distinctions, see [the updated research](design/acp-reference-research-2026-10.md). Use the [current roadmap](roadmap.md) for implementation priorities; counts, versions, and support claims below describe the original sample.
+
 Protocol state: **ACP v2** (`agentclientprotocol.com/protocol/v2/*`; docs tree `docs/protocol/v2/` in [agentclientprotocol/agent-client-protocol](https://github.com/agentclientprotocol/agent-client-protocol)). v2 renamed `session/load` → `session/resume` (+ `replayFrom`), added `session/list`, `session/delete`, `session/close`, `state_update` (idle-with-stop-reason even while background work continues), `plan_update` w/ `planId`, elicitation (form/URL), `session_config_options`. Capabilities are grouped into "surfaces" (`session`, `fs`, `terminal`, `mcp`, `auth`, `elicitation`, `subagents`); unknown capability fields MUST be ignored.
 
 Official agent list: **48 agents**, machine-readable at `https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json` ([registry repo](https://github.com/agentclientprotocol/registry)). CI verifies every entry returns valid `authMethods` in the handshake; versions auto-bumped hourly from npm/PyPI/GitHub releases. Schema is distribution-only (`npx` / `uvx` / `binary` with per-platform archive + sha256 + `cmd` + `args`) — **there is no capability matrix**, so a client cannot know feature coverage without probing.

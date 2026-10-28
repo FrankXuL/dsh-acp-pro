@@ -10,7 +10,7 @@ import type {
   AcpPermissionOptionRecord, AcpPermissionRecord, AcpPermissionStatus, AcpPlanEntryRecord, AcpPlanRecord,
   AcpToolCallRecord, AcpToolContentView, AcpToolLocation, AcpToolStatus,
 } from '../../shared/records.ts'
-import { appendPluginRecord } from '@deepseek-ai/dsh-session'
+import * as DshSession from '@deepseek-ai/dsh-session'
 import { ACP_PERMISSION_EVENT, ACP_PLAN_EVENT, ACP_TOOL_CALL_EVENT } from '../../shared/records.ts'
 
 /** Maximum stored chars for one text content block. */
@@ -136,6 +136,11 @@ function planEntries(entries: readonly PlanEntry[]): AcpPlanEntryRecord[] {
  */
 export function createAcpRecordSink(session: Session | undefined, logger: HostLogger): AcpRecordSink | undefined {
   if (session === undefined)
+    return undefined
+  const appendPluginRecord = Reflect.get(DshSession, 'appendPluginRecord') as
+    | ((session: Session, type: keyof AcpRecordMap, data: AcpRecordMap[keyof AcpRecordMap]) => void)
+    | undefined
+  if (typeof appendPluginRecord !== 'function')
     return undefined
   const runId = crypto.randomUUID()
   const tools = new Map<string, ToolState>()

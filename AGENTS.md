@@ -66,3 +66,17 @@ nobody asked for.
 - The authoritative DSH plugin-dev guide is
   `skills/engineering/dsh-plugin/SKILL.md` backed by `docs/dsh-plugin-dev/`.
   Read it before touching host/client integration code.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live as markdown files under `.scratch/<feature-slug>/` in this repo, one file per ticket; PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles map to the same-named labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), plus the `wayfinder:*` labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+single-context — one `GLOSSARY.md` at the repo root and architecture decisions in `docs/adr/`. See `docs/agents/domain.md`.

@@ -40,6 +40,7 @@ export type AcpPermissionNodeProps =
   PropsRuntime<'conversation.chat.node', 'acp-permission'> & PropsLocale<'dshAcpPro'> & InjectFace<AcpPermissionInjected>
 
 type Translate = AcpToolCallNodeProps['t']
+type OpenFile = AcpToolCallNodeProps['openFile']
 
 const KIND_GLYPH: Readonly<Record<string, string>> = {
   read: 'R',
@@ -76,25 +77,33 @@ function durationLabel(t: Translate, data: AcpToolCallViewData): string | undefi
   return t('tool.duration', { duration: seconds < 1 ? '<1s' : seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m${seconds % 60}s` })
 }
 
-function summaryOf(data: AcpToolCallViewData): string | undefined {
-  const location = data.locations[0]
-  if (location !== undefined)
-    return location.line === undefined ? location.path : `${location.path}:${location.line}`
-  if (data.input !== null && data.input.length > 0)
-    return data.input.replace(/\s+/g, ' ').slice(0, 160)
-  return undefined
+function locationLabel(location: AcpToolCallViewData['locations'][number]): string {
+  return location.line === undefined ? location.path : `${location.path}:${location.line}`
 }
 
-function DiffBlock({ path, oldText, newText, t }: {
+function inputPreview(input: string | null): { text: string, truncated: boolean } | undefined {
+  if (input === null || input.length === 0)
+    return undefined
+  const text = input.replace(/\s+/g, ' ').trim()
+  return {
+    text: text.slice(0, 160),
+    truncated: text.length > 160 || /… \(\d+ chars omitted\)$/.test(text),
+  }
+}
+
+function DiffBlock({ path, oldText, newText, t, openFile }: {
   path: string
   oldText: string | null
   newText: string
   t: Translate
+  openFile: OpenFile
 }): ReactElement {
   const lines = useMemo(() => lineDiff(oldText ?? '', newText), [oldText, newText])
   return (
     <div className="dap-diff-block">
-      <div className="dap-diff-path">{path}</div>
+      <button type="button" className="dap-file-path" onClick={() => { void openFile(path) }} title={path}>
+        {path}
+      </button>
       {lines === null
         ? (
             <div className="dap-diff-fallback">
@@ -118,15 +127,16 @@ function DiffBlock({ path, oldText, newText, t }: {
   )
 }
 
-function ContentBlock({ block, t }: {
+function ContentBlock({ block, t, openFile }: {
   block: AcpToolCallViewData['content'][number]
   t: Translate
+  openFile: OpenFile
 }): ReactElement {
   switch (block.type) {
     case 'text':
       return <pre className="dap-pre">{block.text}</pre>
     case 'diff':
-      return <DiffBlock path={block.path} oldText={block.oldText} newText={block.newText} t={t} />
+      return <DiffBlock path={block.path} oldText={block.oldText} newText={block.newText} t={t} openFile={openFile} />
     case 'terminal':
       return <div className="dap-hint">{t('tool.terminal', { id: block.terminalId })}</div>
     case 'link':
@@ -140,12 +150,17 @@ function ContentBlock({ block, t }: {
 }
 
 /** One ACP tool call as a compact activity row with an expandable body. */
-export function AcpToolCallNode({ node, t }: AcpToolCallNodeProps): ReactElement {
+export function AcpToolCallNode({ node, t, openFile }: AcpToolCallNodeProps): ReactElement {
   const [open, setOpen] = useState(false)
   const data = node.data
-  const summary = summaryOf(data)
+  // Older saved snapshots predate the detail fields, so keep them renderable.
+  const content = data.content ?? []
+  const locations = data.locations ?? []
+  const input = data.input ?? null
+  const output = data.output ?? null
+  const preview = inputPreview(input)
   const duration = durationLabel(t, data)
-  const hasBody = data.content.length > 0 || data.input !== null || data.output !== null
+  const hasBody = content.length > 0 || locations.length > 0 || input !== null || output !== null
   return (
     <div className="dap-rec" data-status={data.status}>
       <button
@@ -156,28 +171,68 @@ export function AcpToolCallNode({ node, t }: AcpToolCallNodeProps): ReactElement
       >
         <span className="dap-rec-glyph" aria-hidden="true">{glyphOf(data.kind)}</span>
         <span className="dap-rec-title">{data.title}</span>
-        {summary === undefined ? null : <span className="dap-rec-summary">{summary}</span>}
+        {locations[0] === undefined ? null : (
+          <span className={`dap-rec-summary${preview === undefined ? '' : ' dap-rec-summary-with-preview'}`}>
+            {locationLabel(locations[0])}
+          </span>
+        )}
+        {preview === undefined ? null : (
+          <span className="dap-rec-input-preview" title={input ?? undefined}>
+            <span className="dap-rec-input-preview-text">{preview.text}</span>
+            {preview.truncated ? <span className="dap-rec-preview-truncated">{t('tool.previewTruncated')}</span> : null}
+          </span>
+        )}
         <span className="dap-rec-meta">
           {duration === undefined ? null : <span className="dap-rec-duration">{duration}</span>}
-          <span className="dap-rec-status">{statusLabel(t, data.status)}</span>
+          <span
+            className="dap-rec-status"
+            role={data.status === 'failed' ? 'alert' : data.status === 'pending' || data.status === 'in_progress' ? 'status' : undefined}
+            aria-live={data.status === 'failed' ? 'assertive' : data.status === 'pending' || data.status === 'in_progress' ? 'polite' : undefined}
+          >
+            {statusLabel(t, data.status)}
+          </span>
           <span className="dap-rec-dot" aria-hidden="true" />
         </span>
       </button>
       {open
         ? (
             <div className="dap-rec-body">
-              {data.content.length === 0 && !hasBody ? <div className="dap-hint">{t('tool.noDetail')}</div> : null}
-              {data.content.map((block, index) => <ContentBlock key={index} block={block} t={t} />)}
-              {data.input === null ? null : (
+              {!hasBody ? <div className="dap-hint">{t('tool.noDetail')}</div> : null}
+              {locations.length === 0 ? null : (
                 <div className="dap-field">
-                  <div className="dap-field-label">{t('tool.input')}</div>
-                  <pre className="dap-pre">{data.input}</pre>
+                  <div className="dap-field-label">{t('tool.locations')}</div>
+                  <div className="dap-rec-locations">
+                    {locations.map((location, index) => (
+                      <button
+                        key={`${location.path}:${location.line ?? ''}:${index}`}
+                        type="button"
+                        className="dap-file-path dap-rec-location"
+                        data-location-index={index}
+                        onClick={() => {
+                          if (location.line === undefined)
+                            void openFile(location.path)
+                          else
+                            void openFile(location.path, { line: location.line })
+                        }}
+                        title={locationLabel(location)}
+                      >
+                        {locationLabel(location)}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
-              {data.output === null ? null : (
+              {content.map((block, index) => <ContentBlock key={index} block={block} t={t} openFile={openFile} />)}
+              {input === null ? null : (
+                <div className="dap-field">
+                  <div className="dap-field-label">{t('tool.input')}</div>
+                  <pre className="dap-pre">{input}</pre>
+                </div>
+              )}
+              {output === null ? null : (
                 <div className="dap-field">
                   <div className="dap-field-label">{t('tool.output')}</div>
-                  <pre className="dap-pre">{data.output}</pre>
+                  <pre className="dap-pre">{output}</pre>
                 </div>
               )}
             </div>

@@ -21,6 +21,7 @@
   },
   "include": [
     "src",
+    "scripts",
     "tests",
     "types",
     "tsdown.config.ts",

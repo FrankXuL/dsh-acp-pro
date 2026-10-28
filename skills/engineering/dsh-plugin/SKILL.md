@@ -97,8 +97,32 @@ node node_modules/tsdown/dist/run.mjs              # build -> dist/index.js + di
 ```
 
 `dist/` is **gitignored and rebuilt before install**. `scripts/smoke.mts`
-(`npx tsx` …) handshakes a real agent and lists models without burn. Details in
+(`node --import tsx scripts/smoke.mts …`) reports real Agent protocol/session
+metadata without submitting a prompt by default. Details in
 `docs/dsh-plugin-dev/05-build-test.md`.
+
+## Session controls and durable bindings
+
+- `shared/session-control.ts` owns the cross-face snapshot and control contract;
+  `shared/session-control-remote.ts` owns matching strict boundary codecs. Host
+  local invocations and Client Remote descriptors use distinct Typert contribution
+  shapes; a Client descriptor contribution alone cannot register Host dispatch.
+- `host/dsh-session-control.ts` exposes the existing adapter, and the Client input
+  dock panel reads confirmed configuration. Native model/thought-level controls
+  remain the sole editing entry for those options; other select/mode controls and
+  command insertion are session-scoped.
+- `service/session-coordinator.ts` orders operations per binding;
+  `service/session-store.ts` stores minimal identities, cursors, usage baselines
+  and pending markers atomically. `apply.ts` chooses the profile data directory
+  when available, otherwise `DSH_HOME/data/dsh-acp-pro`; this is durable data,
+  separate from capability caches.
+- Persist pending before sending a prompt. Unknown outcomes must not be replayed
+  through either incremental input or a new session's full history. Explicit reset
+  starts a fresh input boundary. Load replay only rebuilds state, and only an exact
+  live process/generation/session turn may handle permission requests.
+- Real DSH/Agent verification is intentionally handed off using
+  `docs/dsh-verification-handoff.md`; mock success is not a runtime compatibility
+  claim.
 
 ## How to install / load in DSH
 
@@ -126,11 +150,13 @@ node node_modules/tsdown/dist/run.mjs              # build -> dist/index.js + di
 
 ## Known seams & ongoing work
 
-See `docs/roadmap.md` (v0.2 → v1.0): card redesign against DSH native rows, control
-plane `set_config_option`, session lifecycle, subagents, registry. Explicit
+See `docs/roadmap.md` (P0 → P4): DSH compatibility boundaries, session configuration
+and reasoning metadata, session lifecycle, native interaction, subagents and registry. Explicit
 non-goals there: faking tool events and hardcoded agent tables are **not** wanted.
 
 ## Full guide
 
 Continue to `docs/dsh-plugin-dev/01-overview.md` and the rest of that folder for
-the complete knowledge base with per-module pointers.
+the complete knowledge base with per-module pointers. Current compatibility evidence
+and the distinction between source contracts and app validation are in
+`docs/dsh-plugin-dev/09-compatibility.md`.

@@ -34,13 +34,22 @@ or mutating `node_modules`.
 
 ## Smoke test
 
-`scripts/smoke.mts` (run with `node --import tsx` / `npx tsx`) does a handshake and
-model discovery against a real ACP agent without spending quota; append `-- your
-question` to actually run a turn:
+`scripts/smoke.mts` uses the installed `tsx` loader. By default it initializes a
+real ACP agent, creates a diagnostic session, and reports protocol, agent,
+capability, configuration and mode metadata without submitting a prompt. It closes
+the session when supported and cleans up its process and temporary directory.
+Append `-- your question` to explicitly run a turn through the adapter:
 
 ```bash
-npx tsx scripts/smoke.mts "$(command -v codex-acp)"
+node --import tsx scripts/smoke.mts /absolute/path/to/agent
+node --import tsx scripts/smoke.mts /absolute/path/to/agent -- your question
 ```
+
+`commands: null` means no command notification had arrived at the probe snapshot;
+an empty array means the agent explicitly reported no commands. Custom metadata,
+startup arguments, environment values and credential-like option fields are not
+included in this report. Real DSH installation and UI checks are in
+[the verification handoff](../dsh-verification-handoff.md).
 
 ## Test suite
 
@@ -50,6 +59,10 @@ npx tsx scripts/smoke.mts "$(command -v codex-acp)"
   empty response, auth, reasoning level, handshake input capability, learned
   context window, and real cordis + `LlmRuntime` register/unmount/volatile hot edit).
 - Record-sink and card definitions have their own unit tests.
+- Session controls and persistence have configuration ordering, unknown-turn and
+  recovery regressions; bridge tests cover Host/Client registration and panel
+  refresh. The smoke helper has a separate mock fixture that verifies the default
+  path never submits a prompt. The standard typecheck includes `scripts/`.
 
 ## Client build hygiene
 

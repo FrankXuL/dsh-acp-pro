@@ -3,7 +3,6 @@ import type { AcpClientContext } from '../types/runtime.ts'
 import { PLUGIN_ID } from '../../shared/constants.ts'
 import { AgentsSection } from '../components/agents-section.tsx'
 import { NS, translator } from '../locales/index.ts'
-import { registerModelsHint } from './models-hint.ts'
 
 /**
  * Settings namespace = the profile entry id `cordis.patch.yml` inserts (0.2 cores key
@@ -30,9 +29,6 @@ export function registerAgentsSection(ctx: AcpClientContext): () => void {
         label: () => t('nav'),
         inject: () => props,
       }, AgentsSection)),
-      // The official Models page lists ACP routes under this entry's namespace; its generic
-      // editor cannot edit them, so its hint points here instead.
-      registerModelsHint(ENTRY, t),
     ]
     return () => {
       for (const dispose of disposers)

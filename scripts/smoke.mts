@@ -1,25 +1,24 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { agentsOf, Config } from '../src/host/config/schema.ts'
 import { AcpAdapter } from '../src/host/service/acp-adapter.ts'
+import { inspectAgent, parseSmokeArgs } from './smoke-lib.mts'
 
-const separator = process.argv.indexOf('--')
-const [command, ...args] = separator === -1 ? process.argv.slice(2) : process.argv.slice(2, separator)
-const prompt = separator === -1 ? undefined : process.argv.slice(separator + 1).join(' ')
-if (command === undefined) {
-  console.error('usage: npx tsx scripts/smoke.mts <agent-command> [args...] [-- prompt]')
-  process.exit(1)
-}
+const usage = 'usage: node --import tsx scripts/smoke.mts <agent-command> [args...] [-- prompt]'
 
-const cwd = mkdtempSync(join(tmpdir(), 'dsh-acp-smoke-'))
-const profile = agentsOf(Config({ agents: { smoke: { command, args, cwd, permission: 'reject', authMethod: process.env.ACP_AUTH_METHOD } } } as never)).smoke!
-const adapter = new AcpAdapter({ logger: console, agentOf: () => undefined, approve: undefined, readImage: undefined }, () => new Map([['smoke', profile]]))
-try {
-  const models = await adapter.listModels('smoke')
-  console.log('models:', models.map(model => `${model.id} (${model.name})`).join(', '))
-  if (prompt !== undefined) {
+async function streamPrompt(command: string, args: string[], prompt: string): Promise<void> {
+  const cwd = mkdtempSync(join(tmpdir(), 'dsh-acp-smoke-prompt-'))
+  let adapter: AcpAdapter | undefined
+  try {
+    const profile = agentsOf(Config({ agents: { smoke: { command, args, cwd, permission: 'reject', authMethod: process.env.ACP_AUTH_METHOD } } } as never)).smoke!
+    adapter = new AcpAdapter({
+      logger: { info: () => {}, warn: () => {}, error: () => {} },
+      agentOf: () => undefined,
+      approve: undefined,
+      readImage: undefined,
+    }, () => new Map([['smoke', profile]]))
     const model = process.env.ACP_MODEL ?? 'default'
     for await (const chunk of adapter.stream({ provider: 'smoke', model, messages: [{ role: 'user', content: [{ type: 'text', text: prompt }] }] })) {
       if (chunk.type === 'text-delta' || chunk.type === 'reasoning-delta')
@@ -28,7 +27,43 @@ try {
         console.log(`\n${chunk.type}:`, JSON.stringify(chunk.type === 'usage' ? chunk.usage : chunk.reason))
     }
   }
+  finally {
+    adapter?.dispose()
+    rmSync(cwd, { recursive: true, force: true })
+  }
 }
-finally {
-  adapter.dispose()
+
+async function main(): Promise<void> {
+  const parsed = parseSmokeArgs(process.argv.slice(2))
+  if (parsed === undefined) {
+    console.error(usage)
+    process.exitCode = 1
+    return
+  }
+
+  try {
+    const report = await inspectAgent({
+      command: parsed.command,
+      args: parsed.args,
+      authMethod: process.env.ACP_AUTH_METHOD,
+    })
+    console.log(JSON.stringify(report, null, 2))
+  }
+  catch {
+    console.error('ACP smoke diagnostic failed')
+    process.exitCode = 1
+    return
+  }
+
+  if (parsed.prompt !== undefined) {
+    try {
+      await streamPrompt(parsed.command, parsed.args, parsed.prompt)
+    }
+    catch {
+      console.error('\nACP smoke prompt failed')
+      process.exitCode = 1
+    }
+  }
 }
+
+await main()

@@ -33,20 +33,22 @@ dsh 的模型提供方通常是一个 HTTP 接口。本插件把「一个外部 
 
 - **按路由接入**：每个 ACP Agent 一条 provider 路由；模型选择器按 `displayName` 显示。
 - **模型发现**：模型列表来自 Agent 的 `configOptions`（`category: "model"`），兼容旧版 `models` + `session/set_model`；`default` 表示用 Agent 自己的默认模型。也可以在配置里手写 `models` 覆盖。
-- **推理等级**：Agent 的 `thought_level` 选项映射成 dsh 的推理等级；选中的等级经 `session/set_config_option` 下发，Agent 会话初始等级作为默认值上报。
+- **推理等级**：在独立会话中确认目标模型的 `thought_level` 选项和默认值，按进程代次、工作目录和模型缓存；原生选择器的选择经 `session/set_config_option` 下发，不通过切换活动会话来探测元数据。
 - **图片输入**：按 ACP 握手应答里的 `promptCapabilities.image` 判断 Agent 能收什么；未握手过时会先做一次「只握手、不开会话」的探测，答案按路由缓存。`imageInput` 可覆盖误报。图片按 dsh 的请求尺寸重新编码后作为 ACP `image` 块发送。
 - **上下文窗口**：优先级为 `models[].contextWindow` → Agent 通过 `usage_update` 上报过的大小（缓存复用）→ 模型 id/名称/描述里的 `1m` 标记 → 路由级 `contextWindow` → `200000` 兜底。
 
 ### 会话桥接
 
 - 每个 dsh 会话复用同一个 ACP 会话，后续轮次只发送新增的用户消息。
-- 历史对不上（切过模型、被压缩）时自动新建 ACP 会话，并把历史压平成 `<conversation_history>` 一次性带过去；Agent 收图时历史中的图片按原位置作为 `image` 块重发，不会被压成文本。
+- Agent 支持模型选择时，在原会话切换模型。已确认历史不再匹配且可以安全重建时，新会话会把历史压平成 `<conversation_history>`；这不等于恢复 Agent 内部状态。
+- 绑定、消费游标、用量基线和发送前的待确认标记持久化保存。重启后仅在 Agent 声明 `loadSession` 时尝试加载；没有加载能力时明确作为新会话处理。
+- 请求结果未知时阻止自动重提和历史重放。会话面板可明确选择新上下文，之后需发送新消息；没有控制面板的宿主可新建 DSH 会话。停止和卸载会取消该活动回合的待决审批。
 - 标题生成、压缩等辅助调用使用一次性 ACP 会话，不记录卡片。
 - 工作目录取当前 dsh 会话的 workspace，取不到时回退到 `cwd` 配置或用户主目录。
 
 ### 执行过程卡片
 
-- **工具卡**：ACP `tool_call` / `tool_call_update` → 紧凑行，显示 kind 图标、标题、摘要（首个文件位置，否则原始输入）、耗时（终态才显示）与状态（`pending` / `in_progress` / `completed` / `failed`）。展开后显示文本、逐行 diff（过大时整段回退）、终端占位、链接/图片占位，以及被截断的原始 input / output。
+- **工具卡**：ACP `tool_call` / `tool_call_update` → 紧凑行，显示 kind 图标、标题、文件位置、输入预览、耗时和状态。展开后显示全部文件位置、文本、逐行 diff、终端及链接/图片占位、原始 input / output；文件按钮支持宿主跳转，截断有明确提示，失败和等待状态保持可见。
 - **计划卡**：ACP `plan` → 清单卡，带 `✓` 完成 / `●` 进行中 / `×` 取消 / `○` 待办标记与「完成数/总数」。
 - **权限卡（展示级）**：ACP 权限请求 → 显示请求标题、工具 kind、Agent 给出的选项（允许一次 / 始终允许 / 拒绝一次 / 始终拒绝）与最终状态（等待答复 / 已允许 / 已拒绝 / 已取消）。**可点击的允许/拒绝按钮尚未提供**；答复仍走 dsh 原生审批框，卡片只做记录与展示。
 - **历史重建**：卡片由会话日志里的插件记录驱动，刷新页面、重新打开或恢复会话时按记录重建；记录是 `ignorable` 的仅日志事件，旧版本 dsh 读到会跳过并保留，且不进入模型可见的对话历史。
@@ -57,6 +59,9 @@ dsh 的模型提供方通常是一个 HTTP 接口。本插件把「一个外部 
 - **导入 JSON**：粘贴其他 ACP 客户端（如 Zed 的 `agent_servers`）的配置批量导入；先预览「新增/覆盖/跳过」，勾选后原子写入。
 - **发现模型**：按已保存的命令启动 Agent，读取它公布的模型并追加到列表。
 - 直接改档案 `cordis.patch.yml` 同样生效；设置页的写入也落在这一段配置上。
+- **当前会话面板**：在支持 Typert 控制接口的宿主中，显示 Agent 确认的配置、模式、命令和恢复状态；支持普通/分组 select，运行中提交的配置按会话顺序等待应用。模型和思考强度保持原生控件为唯一编辑入口，命令按钮只插入输入框，不自动发送。当前不宣告 boolean 配置能力。
+
+绑定数据优先存放在实际 profile 的 `data/dsh-acp-pro`，无 profile 路径服务时使用 `$DSH_HOME/data/dsh-acp-pro`（默认 `~/.dsh`）。只保存必要身份、游标和状态，不复制凭据或完整聊天正文。尚未完成的真实 DSH/Agent 验收、可选接口条件和执行步骤见[验收交接](docs/dsh-verification-handoff.md)及[兼容性证据](docs/dsh-plugin-dev/09-compatibility.md)。
 
 ## 截图
 
@@ -186,7 +191,9 @@ npm install && npm run build
 | `forwardMcp` | `true` | 为 `true` 时把 dsh 已配置的 MCP servers 通过 ACP `session/new` 传给该 Agent；`false` 不传。设置页暂未提供这个开关，需要改 YAML。外部 Agent 是否真正支持这些 server 取决于它对 ACP `mcpServers` 的实现。 |
 | `contextWindow` | `200000` | 上报给 dsh 的上下文窗口（用于压缩策略）；Agent 上报过实际大小时以实际值为准。 |
 | `startupTimeoutMs` | `60000` | 握手超时。 |
-| `idleTimeoutMs` | `600000` | 流式输出空闲超时；`0` 表示关闭。 |
+| `idleTimeoutMs` | `600000` | 流式输出空闲超时；`0` 表示关闭。计时器在 Agent 每次上报更新时重置，因此「一直在产出思考流」的回合不会超时；超时以 `TIMEOUT` 结束，且优先于取消。 |
+
+**取消与超时的结果优先级**：用户中止后，该回合的结果立刻锁定为 `aborted`；Agent 在取消宽限期（5 秒）内返回的正常响应只用于继续排空尾部输出，不会把 `aborted` 覆盖成 `stop`。空闲超时若先于中止触发，则以 `TIMEOUT` 为准——它才是回合结束的真实原因。两种情况都会把「回合结果未知」的标记清掉，不会遗留需要 reset 的状态。
 
 插件学到的元数据存放在 `$DSH_HOME/cache/dsh-acp-pro/`：`prompt-capabilities.json`（Agent 声明能收的内容类型，按路由 + 启动命令指纹缓存）和 `context-windows.json`（Agent 通过 `usage_update` 上报过的窗口大小）。
 

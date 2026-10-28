@@ -1,4 +1,6 @@
 /** Settled outcome of one ACP permission request. */
+import type { AcpBindingStore } from '../service/session-store.ts'
+
 export type AcpPermissionDecision = 'allowed' | 'rejected' | 'cancelled'
 
 /** One model turn's ACP update recorder, owned by the Host plugin. */
@@ -42,6 +44,8 @@ export interface HostImage {
 
 export interface AdapterHost {
   logger: HostLogger
+  /** Durable binding state supplied by the Host; omitted in isolated callers and tests. */
+  bindingStore?: AcpBindingStore
   agentOf: (sessionId: string) => HostAgent | undefined
   approve: ((request: ApprovalRequest) => Promise<ApprovalOutcome>) | undefined
   /** Request-sized bytes of one image attachment; absent when no attachment store is mounted. */

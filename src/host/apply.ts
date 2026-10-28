@@ -8,16 +8,18 @@ import type { AdapterHost, AcpRecordSink, ApprovalOutcome, ApprovalRequest, Host
 import type { McpLoader } from './service/mcp-servers.ts'
 import type { RequestImageBudget, RequestImageTarget } from './service/request-image.ts'
 import { homedir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
 import process from 'node:process'
 import { PLUGIN_ID, SETTINGS_NS } from '../shared/constants.ts'
 import { agentsOf, Config } from './config/schema.ts'
 import { AcpAdapter } from './service/acp-adapter.ts'
 import { createAcpRecordSink } from './service/acp-record-sink.ts'
+import { registerAcpSessionControlBridge } from './dsh-session-control.ts'
 import { ContextWindows } from './service/context-windows.ts'
 import { collectAcpMcpServers, installMcpServerSource } from './service/mcp-servers.ts'
 import { PromptCapabilitiesCache } from './service/prompt-capabilities.ts'
 import { requestImageTarget } from './service/request-image.ts'
+import { FileAcpBindingStore } from './service/session-store.ts'
 
 /**
  * 0.1 cores offer `installSection` (namespace `llm-acp-pro`, live source swaps); 0.2 cores
@@ -51,12 +53,23 @@ interface AttachmentsService {
 }
 
 /** Where this plugin's learned facts persist: `$DSH_HOME` (default `~/.dsh`), as dsh resolves it. */
-function cacheFile(name: string): string {
+function dshHomeDirectory(): string {
   const configured = process.env.DSH_HOME?.trim()
   const home = configured === undefined || configured.length === 0
     ? join(homedir(), '.dsh')
     : configured === '~' || configured.startsWith('~/') ? join(homedir(), configured.slice(1)) : configured
-  return join(resolve(home), 'cache', PLUGIN_ID, name)
+  return resolve(home)
+}
+
+function cacheFile(name: string): string {
+  return join(dshHomeDirectory(), 'cache', PLUGIN_ID, name)
+}
+
+function sessionDataDirectory(ctx: Context): string {
+  const profileDir = (ctx.get('profileContext') as { dir?: unknown } | undefined)?.dir
+  if (typeof profileDir === 'string' && isAbsolute(profileDir))
+    return join(profileDir, 'data', PLUGIN_ID)
+  return join(dshHomeDirectory(), 'data', PLUGIN_ID)
 }
 
 /** Same request-image budget dsh-llm-pi-ai uses by default. */
@@ -117,6 +130,7 @@ export function apply(ctx: Context, config: Config): void {
 
   const host: AdapterHost = {
     logger: ctx.logger,
+    bindingStore: new FileAcpBindingStore(sessionDataDirectory(ctx)),
     agentOf: sessionId => (ctx.get('agents') as AgentsService | undefined)?.get(sessionId),
     get approve() {
       const approval = ctx.get('approval') as ApprovalService | undefined
@@ -143,6 +157,18 @@ export function apply(ctx: Context, config: Config): void {
     new PromptCapabilitiesCache(cacheFile('prompt-capabilities.json'), ctx.logger),
   )
   ctx.effect(() => () => adapter.dispose(), `${PLUGIN_ID}: agents`)
+  ctx.effect(async () => {
+    try {
+      const dispose = await registerAcpSessionControlBridge(ctx, adapter)
+      if (dispose !== undefined)
+        return dispose
+      ctx.logger.warn(`${PLUGIN_ID}: ACP session controls are unavailable because the Typert Host API is missing`)
+    }
+    catch (error) {
+      ctx.logger.warn(`${PLUGIN_ID}: ACP session controls are unavailable`, error)
+    }
+    return () => {}
+  }, `${PLUGIN_ID}: session control bridge`)
 
   // `dsh-mcp-client` runs one entry per server and publishes no registry, so the Loader entry
   // tree is the enumerable source. Profile patches insert those entries after this bundle's,

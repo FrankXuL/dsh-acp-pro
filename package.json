@@ -64,8 +64,18 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "*",
     "@deepseek-ai/dsh-llm": "*",
+    "@deepseek-ai/dsh-typert-protocol": "*",
+    "@deepseek-ai/dsh-typert-registry": "*",
     "@deepseek-ai/schemastery": "*",
     "@deepseek-ai/dsh-session": "*"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-typert-protocol": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-typert-registry": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@agentclientprotocol/sdk": "1.4.0",
