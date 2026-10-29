@@ -1,6 +1,6 @@
 <!-- DSH-FORMAT: md-v1 -->
 <!-- DSH-TITLE: 模型选择器来源 tab 与 ACP 启停 -->
-<!-- DSH-STATUS: ready-for-agent -->
+<!-- DSH-STATUS: closed -->
 <!-- DSH-LABELS: wayfinder:map -->
 <!-- DSH-IDEMPOTENCY-KEY: deck-plan-model-picker-source-tabs-v1-map -->
 <!-- DSH-CREATED: 2026-10-27T13:47:48.753Z -->
@@ -50,3 +50,26 @@
 - 进度：83%（2026-10-28T22:15+08:00）：5/7 票关闭；#04 原型验收通过；frontier 变为 #05 兼容回退、#07 收藏与图标
 - 进度：86%（2026-10-28T22:35+08:00）：6/7 票关闭；#05 兼容回退定稿；仅剩 #07 收藏与图标
 - 进度：100%（2026-10-28T00:52+08:00）：7/7 票关闭；地图终点已达成，可进 `/to-spec`。
+
+## 收口归档（2026-10-29）
+
+本图已关闭（`DSH-STATUS: closed`）。归档说明记在这里——地图容器后端不支持评论，`deck_issue_patch` 的 `comment` 步骤返回 `backend-unsupported`，故归档结论落在正文而非评论区。
+
+**终点核对**：Destination 要求「一组已拍板、可直接进 `/to-spec` 的规格」六要素逐项有落点：
+
+| Destination 要素 | 落在哪 |
+| --- | --- |
+| 替换方案与契约 | 票 03（影子替换契约）+ 规格 §3-§5，由实施票 04 落地 |
+| 来源判定 | 票 06（来源 = 自有 `agents` 键集合，零 host 改动） |
+| 启停语义 | 票 01（软关闭 + 回合结束回收） |
+| 收藏与图标 | 票 07（volatile `favorites` + `agents.icon`） |
+| 兼容与回退 | 票 05（只承诺 0.2 核心、`/model` 差异仅文档） |
+| 验收标准 | 票 05 + 实施票 01-06 各自门禁 |
+
+**产物已落地**（不是纸上方案）：7 票决策折叠为 [`.scratch/model-picker-ui/spec.md`](../model-picker-ui/spec.md)（`DSH-STATUS: done`），其 6 张实施票 01-06 全部关闭——选择器转正、接配置、设置页开关、文档收口均已在 `main` 运行。
+
+**frontier**：7/7 子票 closed，open 0 / blocked 0，无待解决策。
+
+**fog 与 out-of-scope 的处置**：两条 fog（卸载重装后的选择记忆、窄视口 <640px 降级）实现阶段并未成为必须做的决策，随图收在「未实测」；三条 out-of-scope（改 DSH 上游、`/model` 弹窗内部、其他插件）自始至终未越界。二者如需推进应另立新图，不在本图复活。
+
+**过程中的计划外产出**：子票 04 原型期暴露的「弹层被侧边栏/动作条遮挡」判据，收口后由独立 bug 单「模型选择器弹层不在最顶层」修复（portal 到 body，提交 `675e8ca`）。该缺陷不在本图 scope 内，仅作关联记录。
