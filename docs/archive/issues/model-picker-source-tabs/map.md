@@ -13,8 +13,8 @@
 ## Notes
 
 - 领域：DSH 插件（Host `src/host` + Web Client `src/client`）。模型选择器是 DSH 官方的 `conversation.input.model` 座位，插件侧只能影子替换（`priority` 更低者渲染），不能改原生选择器内部。
-- 必读一手笔记：[`docs/design/dsh-model-picker-research-2026-10-27.md`](../../docs/design/dsh-model-picker-research-2026-10-27.md) —— 一句话结论：选择器无来源 tab 插槽；真 tab 只能整座替换或上游扩展；“逐 ACP 启停、关闭后只从选择器消失”可用 route 集合表达，但已保存选择会变 unroutable。
-- 本轮研究笔记：[影子替换契约](../../docs/design/model-picker-shadow-contract-2026-10-27.md) —— 影子注册骨架、`modelDirectories` 数据面、原生行为清单、三条降级；[来源判定与热更新](../../docs/design/model-picker-source-classification-2026-10-27.md) —— 来源 = 自有 `agents` 键集合（零 host 改动）、`groups[].id` = route、`enabled` 必须放进 volatile `agents`。
+- 必读一手笔记：[`docs/design/dsh-model-picker-research-2026-10-27.md`](../../../design/dsh-model-picker-research-2026-10-27.md) —— 一句话结论：选择器无来源 tab 插槽；真 tab 只能整座替换或上游扩展；“逐 ACP 启停、关闭后只从选择器消失”可用 route 集合表达，但已保存选择会变 unroutable。
+- 本轮研究笔记：[影子替换契约](../../docs/design/model-picker-shadow-contract-2026-10-27.md)（调研笔记已于 2026-10-28 归档清理时删除） —— 影子注册骨架、`modelDirectories` 数据面、原生行为清单、三条降级；[来源判定与热更新](../../docs/design/model-picker-source-classification-2026-10-27.md)（调研笔记已于 2026-10-28 归档清理时删除） —— 来源 = 自有 `agents` 键集合（零 host 改动）、`groups[].id` = route、`enabled` 必须放进 volatile `agents`。
 - 用户已选路线：**插件侧整座替换**（真 tab）；接受 `/model` 弹窗仍是原生无 tab 版（两个入口外观不一致）；本图不推动 DSH 上游。
 - DSH 源码：本机 checkout `/Users/xulilili/Downloads/闲聊/deepseek-harness`（0.2.1-rc.2，commit `687f282e`）；运行版是 0.2.1-rc.3（打包件 `/Applications/DeepSeek Harness.app/Contents/Resources/app.asar`），引用 rc.2 的结论要在 rc.3 复核。
 - 工程约束：每次改动后 `node node_modules/typescript/bin/tsc --noEmit` 与 `node node_modules/vitest/vitest.mjs run` 必须绿；客户端只能 require 平台种子词；样式只用 `--dsw-*` token；不伪造原生 `tool/call`，记录只用 `plugin:*`。

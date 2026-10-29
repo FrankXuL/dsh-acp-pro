@@ -217,7 +217,7 @@
 ## 收口
 
 规格的 6 张实施票全部关闭（`e371943` / `d2dc778` / `36e54e5` / `0c221c0` / `66c137d` / `f99da57`），
-真机验收结论见 §11，兼容复核已记录到 [`docs/dsh-plugin-dev/09-compatibility.md`](../../docs/dsh-plugin-dev/09-compatibility.md)。
+真机验收结论见 §11，兼容复核已记录到 [`docs/dsh-plugin-dev/09-compatibility.md`](../../../dsh-plugin-dev/09-compatibility.md)。
 本规格到此收口。
 
 ## 进度

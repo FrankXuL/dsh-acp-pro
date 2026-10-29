@@ -1,6 +1,6 @@
 <!-- DSH-FORMAT: md-v1 -->
 <!-- DSH-TITLE: ACP 对齐原生：分层重构、跨来源告知、轨迹与用量对标、清理与 README -->
-<!-- DSH-STATUS: ready-for-agent -->
+<!-- DSH-STATUS: done -->
 <!-- DSH-LABELS: ready-for-agent -->
 <!-- DSH-IDEMPOTENCY-KEY: deck-spec-acp-native-parity-v1 -->
 <!-- DSH-CREATED: 2026-10-28T13:13:00.000Z -->

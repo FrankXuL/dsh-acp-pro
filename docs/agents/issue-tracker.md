@@ -10,6 +10,12 @@ Issues and specs (you may know a spec as a PRD) for this repo live as markdown f
 - Triage state is recorded as a `Status:` line near the top of each issue file (see `triage-labels.md` for the role strings)
 - Comments and conversation history append to the bottom of the file under a `## Comments` heading
 
+## Archive
+
+A feature directory whose tickets are all closed moves to `docs/archive/issues/<feature-slug>/`,
+keeping its structure. See `docs/archive/issues/README.md` for the rules, including the relative
+link fix every move needs.
+
 ## When a skill says "publish to the issue tracker"
 
 Create a new file under `.scratch/<feature-slug>/` (creating the directory if needed).

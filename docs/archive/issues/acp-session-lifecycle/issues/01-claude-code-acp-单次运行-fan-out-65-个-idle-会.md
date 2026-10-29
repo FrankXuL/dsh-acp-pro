@@ -159,9 +159,9 @@ if (ephemeral) {
 ## 参考资料
 
 **仓内笔记**
-- [`docs/design/acp-lifecycle-oss-research-2026-10-28.md`](../../docs/design/acp-lifecycle-oss-research-2026-10-28.md) —— 生命周期：Zed / agent 侧 / killpg（270 行，83 条固定 commit 链接）
-- [`docs/design/acp-model-metadata-oss-research-2026-10-28.md`](../../docs/design/acp-model-metadata-oss-research-2026-10-28.md) —— 元数据「惰性 vs 立即」+ DSH 服务端对照（327 行）
-- [`docs/design/acp-session-lifecycle-mechanism-research-2026-10-28.md`](../../docs/design/acp-session-lifecycle-mechanism-research-2026-10-28.md) —— 机制判定与规范原文
+- [`docs/design/acp-lifecycle-oss-research-2026-10-28.md`](../../docs/design/acp-lifecycle-oss-research-2026-10-28.md)（调研笔记已于 2026-10-28 归档清理时删除） —— 生命周期：Zed / agent 侧 / killpg（270 行，83 条固定 commit 链接）
+- [`docs/design/acp-model-metadata-oss-research-2026-10-28.md`](../../docs/design/acp-model-metadata-oss-research-2026-10-28.md)（调研笔记已于 2026-10-28 归档清理时删除） —— 元数据「惰性 vs 立即」+ DSH 服务端对照（327 行）
+- [`docs/design/acp-session-lifecycle-mechanism-research-2026-10-28.md`](../../docs/design/acp-session-lifecycle-mechanism-research-2026-10-28.md)（调研笔记已于 2026-10-28 归档清理时删除） —— 机制判定与规范原文
 
 **一手外部资料**
 - [Session Config Options（v1）](https://agentclientprotocol.com/protocol/v1/session-config-options.md)
@@ -232,7 +232,7 @@ if (ephemeral) {
 - `docs/design/acp-process-bloat-fix-plan-2026-10-28.md`（修复计划，T1–T4 已完成）
 ## 实施进展（2026-10-28）
 
-**T1–T4 已实施并验证**，计划见 [`docs/design/acp-process-bloat-fix-plan-2026-10-28.md`](../../../docs/design/acp-process-bloat-fix-plan-2026-10-28.md)。
+**T1–T4 已实施并验证**，计划见 [`docs/design/acp-process-bloat-fix-plan-2026-10-28.md`](../../../docs/design/acp-process-bloat-fix-plan-2026-10-28.md)（调研笔记已于 2026-10-28 归档清理时删除）。
 
 | 单 | 项 | 改动 | 新测试 |
 | --- | --- | --- | --- |
