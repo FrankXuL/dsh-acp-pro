@@ -72,6 +72,12 @@ After building, you can confirm the client did not bundle host-installed package
 grep -o 'require(\`[^\`]*\`)' dist/client.cjs
 ```
 
-It should only `require` platform seeds (`react`, `react/jsx-runtime`, `@deepseek-ai/*`)
-and profile-loaded entries. Style must come from the plugin and only the host's
-`--dsw-*` design tokens — the web shell supplies no utility CSS.
+It should only `require` platform seeds (`react`, `react/jsx-runtime`, `react-dom`,
+`react-dom/client`, `@deepseek-ai/*`) and profile-loaded entries. Style must come from
+the plugin and only the host's `--dsw-*` design tokens — the web shell supplies no
+utility CSS.
+
+A client that renders outside the shell's own tree (a portaled menu, for instance)
+needs `react-dom` at runtime: bundling it instead ships a second ReactDOM whose
+portal container and event roots disagree with the shell's. `dist/client.cjs` should
+therefore carry a `require("react-dom")`, not an inlined copy.

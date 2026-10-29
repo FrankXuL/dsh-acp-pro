@@ -6,9 +6,8 @@
  * Favorites and the enabled/icon fields come from the plugin's settings document, so they survive
  * restarts and follow the profile rather than one browser origin.
  */
-import type { ReactElement } from 'react'
 import type {
-  AcpModelFavorite, ConfigForm, ConfigFormSnapshot, ModelDirectoryFacade, ModelDirectoryState, ModelInfo, ModelProviderGroup, ModelSelection,
+  ConfigForm, ConfigFormSnapshot, ModelDirectoryFacade, ModelDirectoryState, ModelSelection,
 } from '../types/runtime.ts'
 import { favoriteKey, favoritesOf as configuredFavorites, toggleFavoriteOps } from '../service/favorites.ts'
 import { SourceIcon as SourceGlyph, tabName } from '../view/model-seat/rail.tsx'
@@ -30,7 +29,8 @@ import type { AgentProfileView, SourceIcon } from '../service/model-seat-sources
 import { agentProfilesOf, sourceRoutes } from '../service/model-seat-sources.ts'
 import { anchorFor, rectMoved } from '../service/model-seat-anchor.ts'
 import type { PanelAnchor, Rect } from '../service/model-seat-anchor.ts'
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { createPortal } from 'react-dom'
 
 interface ModelSeatProps {
   sessionId: string
@@ -44,7 +44,6 @@ type Pane = 'root' | 'models' | 'efforts'
 
 const FAVORITES_TAB = SELECTION_FAVORITES_TAB
 const DSH_TAB = SELECTION_DSH_TAB
-const FAVORITES_KEY = 'dsh-acp-pro:prototype:favorites'
 
 const EMPTY_STATE: ModelDirectoryState = {
   current: null,
@@ -325,7 +324,7 @@ function measuredPanelSize(pane: Pane): { width: number, height: number } {
         </span>
         {triggerText}{busy ? ' …' : ' ▾'}
       </button>
-      {open && anchor !== null && (
+      {open && anchor !== null && createPortal(
         <div
           ref={panelRef}
           role="menu"
@@ -416,7 +415,8 @@ function measuredPanelSize(pane: Pane): { width: number, height: number } {
                 )}
             </div>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </span>
   )

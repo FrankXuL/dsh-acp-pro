@@ -9,6 +9,17 @@ beforeAll(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 })
 
+/**
+ * The open panel is portaled to `body` so no ancestor stacking context can cap it; its contents
+ * must therefore be queried from the document, not from the seat's container.
+ */
+function panel(): HTMLDivElement {
+  const element = document.querySelector<HTMLDivElement>('.dsh-model-seat-panel')
+  if (element === null)
+    throw new Error('the model seat panel is not open')
+  return element
+}
+
 /** Methods read `this`, mirroring ConfigFormController and SnapshotStore consumers. */
 class FakeForm {
   private readonly snapshot: {
@@ -108,8 +119,8 @@ describe('model seat favorites wiring', () => {
       } as never)))
       // Open the root pane, then the model pane with its rail.
       await act(async () => container.querySelector<HTMLButtonElement>('.dsh-model-seat-trigger')!.click())
-      await act(async () => container.querySelectorAll<HTMLButtonElement>('.dsh-model-seat-cell')[0]!.click())
-      const labels = [...container.querySelectorAll('.dsh-model-seat-rail-btn')].map(button => button.getAttribute('aria-label'))
+      await act(async () => panel().querySelectorAll<HTMLButtonElement>('.dsh-model-seat-cell')[0]!.click())
+      const labels = [...panel().querySelectorAll('.dsh-model-seat-rail-btn')].map(button => button.getAttribute('aria-label'))
       expect(labels).toContain('Claude Code')
       expect(labels).not.toContain('Disabled')
     }
@@ -159,13 +170,50 @@ describe('model seat effort submission', () => {
         sessionId: 'session-a', locked: false, available: true, models: directory, config,
       } as never)))
       await act(async () => container.querySelector<HTMLButtonElement>('.dsh-model-seat-trigger')!.click())
-      const cells = [...container.querySelectorAll<HTMLButtonElement>('.dsh-model-seat-cell')]
+      const cells = [...panel().querySelectorAll<HTMLButtonElement>('.dsh-model-seat-cell')]
       // Second root cell is 推理.
       await act(async () => cells[1]!.click())
-      const rows = [...container.querySelectorAll<HTMLButtonElement>('.dsh-model-seat-model')]
+      const rows = [...panel().querySelectorAll<HTMLButtonElement>('.dsh-model-seat-model')]
       expect(rows.map(row => row.textContent)).toEqual(['Low✓', 'High'])
       await act(async () => rows[1]!.click())
       expect(calls).toEqual([{ provider: 'cc', model: 'default', reasoningEffort: 'high' }])
+    }
+    finally {
+      await act(async () => root.unmount())
+    }
+  })
+})
+
+describe('panel layering', () => {
+  // Regression for the reported bug: the panel used to render inline inside `span.dsh-model-seat`,
+  // which the composer seat wraps in a `position:sticky; z-index:7` stacking context. A `fixed`
+  // child cannot outrank its ancestor's stacking context, so any sibling layer at z-index >= 8
+  // (the suggestion-pill row, the back-to-bottom control) painted over the panel no matter how
+  // high its own z-index was.
+  it('mounts the open panel outside the seat subtree so no ancestor can cap it', async () => {
+    const directory = new FakeDirectory()
+    const config = new FakeForm()
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    try {
+      await act(async () => root.render(createElement(ModelSeat as never, {
+        sessionId: 'session-a', locked: false, available: true, models: directory, config,
+      } as never)))
+      await act(async () => container.querySelector<HTMLButtonElement>('.dsh-model-seat-trigger')!.click())
+      const opened = panel()
+      // Escaping the seat subtree is the whole point: a portaled panel has no ancestor between it
+      // and `body`, so the composer seat's stacking context cannot cap its z-index.
+      expect(opened.parentElement).toBe(document.body)
+      expect(container.contains(opened)).toBe(false)
+      // Nothing between the panel and `body` may establish a stacking context of its own, since
+      // that ancestor would rank the panel inside itself and cap it all over again.
+      let hop = opened.parentElement
+      while (hop !== null && hop !== document.body) {
+        const style = getComputedStyle(hop)
+        expect(style.zIndex === 'auto' || style.position === 'static').toBe(true)
+        hop = hop.parentElement
+      }
     }
     finally {
       await act(async () => root.unmount())
@@ -196,8 +244,8 @@ describe('source marks', () => {
       // The trigger always carries the current source's mark.
       expect(container.querySelector('.dsh-model-seat-trigger-icon svg')).not.toBeNull()
       await act(async () => container.querySelector<HTMLButtonElement>('.dsh-model-seat-trigger')!.click())
-      await act(async () => container.querySelectorAll<HTMLButtonElement>('.dsh-model-seat-cell')[0]!.click())
-      const tabs = [...container.querySelectorAll('.dsh-model-seat-rail-btn')]
+      await act(async () => panel().querySelectorAll<HTMLButtonElement>('.dsh-model-seat-cell')[0]!.click())
+      const tabs = [...panel().querySelectorAll('.dsh-model-seat-rail-btn')]
       const platform = tabs.find(tab => tab.getAttribute('aria-label') === 'DSH')!
       // Platform uses the native fish svg, not a letter.
       expect(platform.querySelector('svg')).not.toBeNull()

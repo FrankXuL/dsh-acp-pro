@@ -3,8 +3,13 @@ import { defineConfig } from 'tsdown'
 
 const { name } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { name: string }
 
-/** Modules the DSH web module table supplies to client bundles at runtime. */
-const CLIENT_SEEDS = ['react', 'react/jsx-runtime', /^@deepseek-ai\//]
+/**
+ * Modules the DSH web module table supplies to client bundles at runtime.
+ * `react-dom` / `react-dom/client` are seeds too (`packages/client/web/src/platform.ts`); bundling
+ * them would ship a second ReactDOM instance whose portal container and event roots disagree with
+ * the shell's.
+ */
+const CLIENT_SEEDS = ['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client', /^@deepseek-ai\//]
 
 export default defineConfig([
   // Host half: an ES module loaded by the DSH host (Node).

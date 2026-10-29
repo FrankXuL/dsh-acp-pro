@@ -44,8 +44,9 @@ Based on `package.json`, `cordis.patch.yml`, `tsdown.config.ts`, `tsconfig.json`
     `dist/index.js` + `dist/index.d.ts` (the host half).
   - `entry { client: 'src/client/index.ts' }`, CJS, `platform: 'browser'` with a
     banner/footer that registers the bundle with the web `window.__ModuleLoader__`
-    → `dist/client.cjs`. `react`, `react/jsx-runtime`, and `@deepseek-ai/*` are
-    `neverBundle` (supplied by the host module table) — `minify`, sourcemap.
+    → `dist/client.cjs`. `react`, `react/jsx-runtime`, `react-dom`,
+    `react-dom/client`, and `@deepseek-ai/*` are `neverBundle` (supplied by the
+    host module table) — `minify`, sourcemap.
 - `dist/` is **gitignored** and rebuilt before install / testing. The browser client
   only `require`s platform seed words and profile-loaded packages
   (README §开发 客户端构建约束).
