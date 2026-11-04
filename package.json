@@ -64,10 +64,10 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "*",
     "@deepseek-ai/dsh-llm": "*",
+    "@deepseek-ai/dsh-session": "*",
     "@deepseek-ai/dsh-typert-protocol": "*",
     "@deepseek-ai/dsh-typert-registry": "*",
-    "@deepseek-ai/schemastery": "*",
-    "@deepseek-ai/dsh-session": "*"
+    "@deepseek-ai/schemastery": "*"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/dsh-typert-protocol": {
@@ -81,7 +81,11 @@
     "@agentclientprotocol/sdk": "1.4.0",
     "@deepseek-ai/cordis": "4.0.5-alpha.1",
     "@deepseek-ai/cosmokit": "1.8.6-alpha.2",
-    "@deepseek-ai/dsh-llm": "0.2.1-alpha.1",
+    "@deepseek-ai/dsh-llm": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-scope": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-session": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-typert-protocol": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-typert-registry": "0.2.1-rc.5",
     "@deepseek-ai/schemastery": "3.18.5-alpha.1",
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
@@ -92,6 +96,7 @@
     "tsdown": "^0.21.10",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
+    "vite": "^8.3.5",
     "vitest": "^5.0.4",
     "zod": "^4.6.7"
   }

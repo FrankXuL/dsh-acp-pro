@@ -6,6 +6,10 @@ coverage/
 .env
 .playwright-mcp/
 .dsh-write-probe
+.npmtmp/
+# Real-agent acceptance scaffolding: an isolated DSH_HOME and its pnpm store.
+.verify-home/
+.pnpm-store/
 .omc/
 .serena/
 
