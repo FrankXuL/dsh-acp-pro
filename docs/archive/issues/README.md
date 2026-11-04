@@ -16,8 +16,9 @@
 | --- | --- | --- |
 | `acp-native-parity-impl/` | 8 | 分层重构 S1–S4 + 跨来源告知 + 轨迹工具行 + 用量标注 + README 收口 |
 | `acp-session-lifecycle/` | 1 | ACP 进程膨胀（65 / 193 进程、MCP 乘法放大） |
+| `codex-acp-mcp-dedup/` | 1 | codex-acp 按名跳过同名 MCP server 却报成 failed；呈现侧降级为「未启动」，host 侧不再丢行 |
 | `model-picker-popup-stacking/` | 1 | 模型选择器弹层被 composer stacking context 裁剪 |
 | `model-picker-source-tabs/` | 7 | 来源 tab 探索地图（wayfinder） |
 | `model-picker-ui/` | 6 | 模型选择器规格与实施票 |
 
-仍在 `.scratch/` 的：`acp-native-parity/`（wayfinder 地图与规格，2026-10-28 刚收口）。
+仍在 `.scratch/` 的：`acp-native-parity/`（wayfinder 地图与规格，2026-10-28 刚收口）、`native-agent-routes/` 与 `native-agent-routes-impl/`（另一条工作线，本目录不含它们的票）。
