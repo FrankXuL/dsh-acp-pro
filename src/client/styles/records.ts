@@ -22,6 +22,9 @@ export const RECORDS_CSS = `
 .dap-rec[data-status=completed] .dap-rec-dot{background:var(--dsw-alias-state-success-primary)}
 .dap-rec[data-status=failed] .dap-rec-dot{background:var(--dsw-alias-state-error-primary)}
 .dap-rec[data-status=failed] .dap-rec-title{color:var(--dsw-alias-state-error-primary)}
+/* A by-name MCP skip reaches us through the failure channel; it must not inherit error colour. */
+.dap-rec[data-status=skipped] .dap-rec-dot{background:var(--dsw-alias-state-idle-primary)}
+.dap-rec[data-status=skipped] .dap-rec-title{color:var(--dsw-alias-label-primary)}
 @keyframes dap-pulse{0%,100%{opacity:1}50%{opacity:.35}}
 .dap-rec-body{display:flex;flex-direction:column;gap:8px;padding:2px 10px 10px;border-top:.5px solid var(--dsw-alias-border-l1)}
 .dap-pre{box-sizing:border-box;max-width:100%;max-height:320px;overflow:auto;margin:6px 0 0;padding:8px 10px;border-radius:var(--dsw-radius-sm,6px);background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-primary);font:12px/18px ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-word}

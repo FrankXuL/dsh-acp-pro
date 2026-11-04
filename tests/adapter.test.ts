@@ -183,6 +183,26 @@ describe('acp adapter', () => {
     expect(seen).toEqual(['start:Edit config.json:2', 'end:allowed'])
   })
 
+  it('records MCP startup tool calls that arrive while session/new is open', async () => {
+    // codex-acp reports a by-name MCP skip as a tool_call before session/new resolves, which is
+    // earlier than the turn the record sink belongs to. Dropping it hides the very row the user
+    // sees in another agent's session log.
+    const pushed: string[] = []
+    const base = host()
+    const recorder: AdapterHost = {
+      ...base,
+      startRecording: () => ({
+        push: (update) => {
+          if (update.sessionUpdate === 'tool_call' || update.sessionUpdate === 'tool_call_update')
+            pushed.push(`${update.sessionUpdate}:${String(update.title ?? update.toolCallId)}`)
+        },
+        permission: () => () => {},
+      }),
+    }
+    await run(create(profile({ env: { MOCK_NEW_TOOL_CALL_BEFORE_RESPONSE: '1' } }), recorder), request([user('silent')]))
+    expect(pushed).toContain('tool_call:mcp__context-mode__startup')
+  })
+
   it('cancels the ACP turn when the request aborts', async () => {
     const controller = new AbortController()
     const chunks: StreamChunk[] = []

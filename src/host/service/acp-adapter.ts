@@ -33,6 +33,7 @@ import { classifySourceChange, decideFromApproval, crossingKey, warningFor } fro
 import { ContextWindows, inferContextWindow } from './context-windows.ts'
 import { decidePermission, permissionOutcome } from './permission.ts'
 import { PromptCapabilitiesCache } from '../domain/prompt-capabilities.ts'
+import { InitialSessionUpdates } from '../domain/initial-session-updates.ts'
 import { consumedIds, conversationOf, fullPrompt, incrementalPrompt, systemText } from './transcript.ts'
 
 interface Binding extends BindingState {
@@ -42,6 +43,8 @@ interface Binding extends BindingState {
   persistQueue?: Promise<void>
   unlisten?: () => void
   activeTurn?: ActiveTurn
+  /** Rows reported before a turn owned the record sink; see `InitialSessionUpdates`. */
+  earlyRows?: InitialSessionUpdates
 }
 
 interface ActiveTurn {
@@ -863,10 +866,13 @@ export class AcpAdapter extends LlmAdapter implements AcpSessionControl {
     if (update.sessionUpdate === 'usage_update' && update.size > 0 && turn !== undefined)
       this.contextWindows.set(binding.provider, turn.model, update.size)
     if (turn !== undefined) {
+      binding.earlyRows?.drainTo(turn.recording)
       turn.recording?.push(update)
       turn.queue.push(...turn.translator.push(update))
       turn.notify()
     }
+    else
+      (binding.earlyRows ??= new InitialSessionUpdates()).add(update)
     if (changed) {
       binding.revision++
       if (settingsChanged)
@@ -1183,6 +1189,7 @@ export class AcpAdapter extends LlmAdapter implements AcpSessionControl {
         throw new LlmError('ACP request was aborted before submission', 'ABORTED')
 
       const recording = ephemeral ? undefined : this.host.startRecording?.(dshSessionId)
+      binding.earlyRows?.drainTo(recording)
       const queue: StreamChunk[] = []
       const translator = new ChunkTranslator(profile.showToolCalls)
       const controller = new AbortController()

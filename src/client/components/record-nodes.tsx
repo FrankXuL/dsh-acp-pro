@@ -5,6 +5,7 @@ import type { ReactElement } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { AcpPlanViewData, AcpPermissionViewData, AcpToolCallViewData } from '../conversation/records.ts'
 import { lineDiff } from '../lib/line-diff.ts'
+import { isSkippedMcpStartup } from '../lib/mcp-startup-notice.ts'
 
 /** Full props of the ACP tool-call row. */
 export type AcpToolCallNodeProps =
@@ -59,12 +60,13 @@ function glyphOf(kind: string | null): string {
   return kind === null ? '·' : KIND_GLYPH[kind] ?? '·'
 }
 
-function statusLabel(t: Translate, status: AcpToolCallViewData['status']): string {
+function statusLabel(t: Translate, status: AcpToolCallViewData['status'] | 'skipped'): string {
   switch (status) {
     case 'pending': return t('status.pending')
     case 'in_progress': return t('status.in_progress')
     case 'completed': return t('status.completed')
     case 'failed': return t('status.failed')
+    case 'skipped': return t('status.skipped')
     /* v8 ignore next -- AcpToolStatus is closed and every variant is handled above. */
     default: return status
   }
@@ -160,9 +162,11 @@ export function AcpToolCallNode({ node, t, openFile }: AcpToolCallNodeProps): Re
   const output = data.output ?? null
   const preview = inputPreview(input)
   const duration = durationLabel(t, data)
+  // A by-name MCP skip reaches us through the failure channel but is not a failure.
+  const status = isSkippedMcpStartup(data) ? 'skipped' as const : data.status
   const hasBody = content.length > 0 || locations.length > 0 || input !== null || output !== null
   return (
-    <div className="dap-rec" data-status={data.status}>
+    <div className="dap-rec" data-status={status}>
       <button
         type="button"
         className="dap-rec-head"
@@ -186,10 +190,10 @@ export function AcpToolCallNode({ node, t, openFile }: AcpToolCallNodeProps): Re
           {duration === undefined ? null : <span className="dap-rec-duration">{duration}</span>}
           <span
             className="dap-rec-status"
-            role={data.status === 'failed' ? 'alert' : data.status === 'pending' || data.status === 'in_progress' ? 'status' : undefined}
-            aria-live={data.status === 'failed' ? 'assertive' : data.status === 'pending' || data.status === 'in_progress' ? 'polite' : undefined}
+            role={status === 'failed' ? 'alert' : status === 'pending' || status === 'in_progress' ? 'status' : undefined}
+            aria-live={status === 'failed' ? 'assertive' : status === 'pending' || status === 'in_progress' ? 'polite' : undefined}
           >
-            {statusLabel(t, data.status)}
+            {statusLabel(t, status)}
           </span>
           <span className="dap-rec-dot" aria-hidden="true" />
         </span>

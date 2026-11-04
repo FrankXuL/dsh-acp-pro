@@ -114,7 +114,7 @@ flowchart LR
 | `imageInput` | `auto` | `auto` 按握手能力判断；`force` 强制开启；`off` 一律文本占位。 |
 | `systemPrompt` | `drop` | `forward` 会把 dsh 系统提示词包进 `<system_instructions>` 转发。dsh 提示词描述的是 dsh 自己的工具，一般不建议转发。 |
 | `showToolCalls` | `false` | `true` 时额外把工具与计划压平进推理块（旧行为）。卡片由记录驱动，不受此开关影响。 |
-| `forwardMcp` | `true` | 是否把 dsh 已配置的 MCP servers 经 `session/new` 传给该 Agent。设置页暂无此开关，需改 YAML。 |
+| `forwardMcp` | `true` | 是否把 dsh 已配置的 MCP servers 经 `session/new` 传给该 Agent。设置页暂无此开关，需改 YAML。转发不等于对方会启动：见下方「转发后的 MCP 去重」。 |
 | `contextWindow` | `200000` | 上报给 dsh 的上下文窗口；Agent 上报过实际大小时以实际值为准。 |
 | `startupTimeoutMs` | `60000` | 握手超时。 |
 | `idleTimeoutMs` | `600000` | 流式空闲超时，`0` 关闭。计时器在 Agent 每次上报时重置，因此持续产出思考流的回合不会超时；超时以 `TIMEOUT` 结束且优先于取消。 |
@@ -131,11 +131,27 @@ flowchart LR
 - **MCP 透传有边界**：dsh 配置的 MCP servers 会经 `session/new` 传给外部 Agent，但支持与否由 Agent 决定；转发后每个 Agent 各自建连，进程与网络开销也由它承担。映射不出的 server 会被跳过并记日志；`forwardMcp: false` 可关闭单个路由。
 - **不重试**：`retryPolicy` 固定 0 次，避免 Agent 重复执行有副作用的操作。
 
+**转发后的 MCP 去重**
+
+转发出去不代表对方会启动它。codex-acp 在 `session/new` 时把请求里的 MCP server 与 Codex 自身配置
+（`~/.codex/config.toml` 的 `[mcp_servers.*]`）做**键名**比对，同名的直接丢弃，并且**复用真实失败的通道**
+上报——`status: failed`、`kind: other`、`title: mcp__<server>__startup`。协议层没有「跳过」这个状态。
+
+本插件的处理口径：
+
+- 判定锚点是上游文案：`was not started, because the Codex config already defines an MCP server with this name`。
+  命中即渲染成「未启动 / Not started」信息行，不套错误色、不带 `role=alert`。
+- 真实启动失败与启动取消的文案前缀是 `[codex-acp forwarded startup error]`，**永远**保持失败行与 `role=alert`。
+- 上游改写文案时判定失效，这类记录会退回诚实失败行——这是有意的回退，不做模糊匹配。
+- 同名 server 实际由 Codex 自己那条提供，所以这条只是呈现噪音，不是能力缺失；只有当 Codex 侧同名条目被禁用时，
+  才真的少一个 MCP。想避免这条记录可以给该路由设 `forwardMcp: false`（代价是 relay 给该 Agent 的 MCP 全丢），
+  或给路由 `env` 设 `DISABLE_MCP_CONFIG_FILTERING=true`（代价是同名 server 真的启动两份）。
+
 **可观测性**
 
 - **权限卡只展示**：没有可点击的允许/拒绝按钮，答复仍走原生审批框。
 - **终端输出是占位**：工具卡里的 ACP `terminal` 内容只显示占位文本，不渲染终端流。
-- **计划与权限不进轨迹**：轨迹视图只有 ACP 工具行；这两类没有对应的承载形状，不做伪装。
+- **轨迹视图里看不到 ACP 行**：ACP 记录以「未知表面」节点（`kind: 'unknown'`）投进轨迹的 `node` 通道，但上游轨迹 fold 只为 `user` / `steering` / `assistant` / `context` / `compaction` / `tool-result` 六种节点产出行，没有兜底分支，所以这类节点被静默丢弃。Definition 的静态契约（target、key、信封）成立，视觉上不出现。计划与权限同样不进轨迹；三者都不做伪装。
 - **文件按文本句柄发送**：dsh 在进入适配器前已把文件块换成句柄文本，因此 ACP 的 `resource` / `embeddedContext` 用不上。
 
 **用量精度**

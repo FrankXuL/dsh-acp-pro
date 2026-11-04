@@ -278,6 +278,21 @@ acp.agent({ name: 'mock-agent' })
         ] },
       })
     }
+    // codex-acp reports a by-name MCP skip as a `tool_call` while `session/new` is still open,
+    // which is earlier than the turn its record sink belongs to.
+    if (process.env.MOCK_NEW_TOOL_CALL_BEFORE_RESPONSE === '1') {
+      await client.notify(acp.methods.client.session.update, {
+        sessionId,
+        update: {
+          sessionUpdate: 'tool_call',
+          toolCallId: 'mcp_startup.context-mode.early',
+          kind: 'other',
+          title: 'mcp__context-mode__startup',
+          status: 'failed',
+          content: [{ type: 'text', text: '[codex-acp] MCP server `context-mode` was not started, because the Codex config already defines an MCP server with this name.' }],
+        },
+      })
+    }
     return { sessionId, configOptions: responseConfigOptions, ...responseModes === undefined ? {} : { modes: responseModes } }
   })
   .onRequest('session/load', async ({ params, client }) => {

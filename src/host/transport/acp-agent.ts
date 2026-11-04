@@ -26,6 +26,7 @@ import { PLUGIN_ID } from '../../shared/constants.ts'
 import { DEFAULT_MODEL_ID } from '../config/constants.ts'
 import { installedMcpServers } from '../domain/mcp-servers.ts'
 import { promptCapabilitiesOf } from '../domain/prompt-capabilities.ts'
+import { InitialSessionUpdates } from '../domain/initial-session-updates.ts'
 
 export interface AcpAdvertisedModel {
   id: string
@@ -84,15 +85,6 @@ interface LegacyModels {
   availableModels?: Array<{ modelId: string, name?: string, description?: string | null }>
 }
 
-type ConfigOptionUpdate = Extract<SessionUpdate, { sessionUpdate: 'config_option_update' }>
-type CurrentModeUpdate = Extract<SessionUpdate, { sessionUpdate: 'current_mode_update' }>
-type AvailableCommandsUpdate = Extract<SessionUpdate, { sessionUpdate: 'available_commands_update' }>
-
-interface InitialSessionUpdates {
-  config?: ConfigOptionUpdate
-  mode?: CurrentModeUpdate
-  commands?: AvailableCommandsUpdate
-}
 
 const AUTH_REQUIRED_CODE = -32000
 
@@ -426,29 +418,24 @@ export class AcpAgentProcess {
       return
     let initial = this.initialSessionUpdates.get(sessionId)
     if (initial === undefined) {
-      initial = {}
+      initial = new InitialSessionUpdates()
       this.initialSessionUpdates.set(sessionId, initial)
     }
-    if (update.sessionUpdate === 'config_option_update')
-      initial.config = update
-    else if (update.sessionUpdate === 'current_mode_update')
-      initial.mode = update
-    else if (update.sessionUpdate === 'available_commands_update')
-      initial.commands = update
+    initial.add(update)
   }
 
   private applyInitialSessionUpdates(session: AcpSession): void {
-    const initial = this.initialSessionUpdates.get(session.sessionId)
-    this.initialSessionUpdates.delete(session.sessionId)
-    if (initial?.config !== undefined)
-      applyConfigOptions(session, initial.config.configOptions)
-    if (initial?.mode !== undefined) {
-      session.modes = session.modes === undefined
-        ? { currentModeId: initial.mode.currentModeId, availableModes: [] }
-        : { ...session.modes, currentModeId: initial.mode.currentModeId }
-    }
-    if (initial?.commands !== undefined)
-      session.availableCommands = [...initial.commands.availableCommands]
+    this.initialSessionUpdates.get(session.sessionId)?.applySettings(({ config, mode, commands }) => {
+      if (config !== undefined)
+        applyConfigOptions(session, config.configOptions)
+      if (mode !== undefined) {
+        session.modes = session.modes === undefined
+          ? { currentModeId: mode.currentModeId, availableModes: [] }
+          : { ...session.modes, currentModeId: mode.currentModeId }
+      }
+      if (commands !== undefined)
+        session.availableCommands = [...commands.availableCommands]
+    })
   }
 
   discardInitialSessionUpdates(sessionId: string): void {
@@ -470,12 +457,10 @@ export class AcpAgentProcess {
     this.pendingInitialSessions.delete(session.sessionId)
     const initial = this.initialSessionUpdates.get(session.sessionId)
     this.initialSessionUpdates.delete(session.sessionId)
-    if (initial?.config !== undefined)
-      onUpdate(initial.config)
-    if (initial?.mode !== undefined)
-      onUpdate(initial.mode)
-    if (initial?.commands !== undefined)
-      onUpdate(initial.commands)
+    for (const update of initial?.pendingSettings ?? [])
+      onUpdate(update)
+    for (const update of initial?.takeTools() ?? [])
+      onUpdate(update)
     return () => {
       if (this.listeners.get(session.sessionId) === onUpdate)
         this.listeners.delete(session.sessionId)

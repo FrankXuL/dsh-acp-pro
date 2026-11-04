@@ -123,7 +123,11 @@ describe('layering', () => {
     // Guards against the debt being forgotten: each file may only get smaller, and a slice that
     // removes it entirely should also remove its entry above.
     const BASELINE = new Map([
-      ['src/host/service/acp-adapter.ts', 1517],
+      // 1517 → 1524: the adapter buffers tool-call rows an agent reports before a turn owns the
+      // record sink, because codex-acp sends its MCP startup rows while `session/new` is open.
+      // The buffering itself lives in `domain/initial-session-updates.ts`; only the drain call
+      // sites are here.
+      ['src/host/service/acp-adapter.ts', 1524],
       ['src/host/transport/acp-agent.ts', 846],
       ['src/client/components/model-seat.tsx', 423],
     ])
